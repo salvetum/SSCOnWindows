@@ -1,0 +1,225 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="15.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <CppWinRTOptimized>true</CppWinRTOptimized>
+    <CppWinRTRootNamespaceAutoMerge>true</CppWinRTRootNamespaceAutoMerge>
+    <MinimalCoreWin>true</MinimalCoreWin>
+    <ProjectGuid>{D2E6A1C0-9B4A-4F3E-8A1D-3C0B2C1A9E0F}</ProjectGuid>
+    <ProjectName>A2DPWBWinUI</ProjectName>
+    <RootNamespace>A2DPWBWinUI</RootNamespace>
+    <TargetName>SSCOnWindows</TargetName>
+    <DefaultLanguage>en-US</DefaultLanguage>
+    <MinimumVisualStudioVersion>18.0</MinimumVisualStudioVersion>
+    <EnableNativePackageReferenceSupport>true</EnableNativePackageReferenceSupport>
+    <AppContainerApplication>false</AppContainerApplication>
+    <AppxPackage>false</AppxPackage>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformMinVersion>10.0.17763.0</WindowsTargetPlatformMinVersion>
+    <TargetPlatformVersion>10.0.26100.0</TargetPlatformVersion>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <UseWinUI>true</UseWinUI>
+    <EnableMsixTooling>true</EnableMsixTooling>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+    <DesktopCompatible>true</DesktopCompatible>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'" Label="Configuration">
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <LinkIncremental>true</LinkIncremental>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Release'" Label="Configuration">
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup>
+    <OutDir>$(ProjectDir)bin\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(ProjectDir)obj\$(Platform)\$(Configuration)\</IntDir>
+    <OutputPath>$(OutDir)</OutputPath>
+    <IntermediateOutputPath>$(IntDir)</IntermediateOutputPath>
+    <ManagedAssembly>false</ManagedAssembly>
+    <XamlLocalAssembly>$(IntDir)Unmerged\MainWindow.winmd</XamlLocalAssembly>
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <ClCompile>
+      <PrecompiledHeader>Use</PrecompiledHeader>
+      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <PrecompiledHeaderOutputFile>$(IntDir)pch.pch</PrecompiledHeaderOutputFile>
+      <WarningLevel>Level4</WarningLevel>
+      <AdditionalOptions>%(AdditionalOptions) /bigobj</AdditionalOptions>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <AdditionalIncludeDirectories>$(XamlGeneratedOutputPath);$(GeneratedFilesDir);$(ProjectDir);$(ProjectDir)..\app\src;$(ProjectDir)..\extern\json\include;$(ProjectDir)..\extern\fdk-aac\libAACenc\include;$(ProjectDir)..\extern\fdk-aac\libSYS\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PreprocessorDefinitions>_WIN32_WINNT=0x0A00;NOMINMAX;WIN32_LEAN_AND_MEAN;APP_VERSION="0.1";AAC_ENCODER_AVAILABLE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
+    <ClCompile>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
+    <ClCompile>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup>
+    <Link>
+      <AdditionalDependencies>$(ProjectDir)..\build_msvc\app\$(Configuration)\a2dpwb_core.lib;$(ProjectDir)..\build_msvc\$(Configuration)\btstack.lib;$(ProjectDir)..\build_msvc\$(Configuration)\sbc_codec.lib;$(ProjectDir)..\build_msvc\fdk-aac\$(Configuration)\fdk-aac.lib;ole32.lib;uuid.lib;avrt.lib;bthprops.lib;ws2_32.lib;propsys.lib;version.lib;setupapi.lib;shcore.lib;winmm.lib;shell32.lib;winusb.lib;windowsapp.lib;dwmapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup Condition="'$(WindowsPackageType)'!='None' and Exists('Package.appxmanifest')">
+    <AppxManifest Include="Package.appxmanifest">
+      <SubType>Designer</SubType>
+    </AppxManifest>
+  </ItemGroup>
+  <ItemGroup>
+    <Manifest Include="app.manifest" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="pch.h" />
+    <ClInclude Include="App.xaml.h">
+      <DependentUpon>App.xaml</DependentUpon>
+    </ClInclude>
+    <ClInclude Include="MainWindow.xaml.h">
+      <DependentUpon>MainWindow.xaml</DependentUpon>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ApplicationDefinition Include="App.xaml" />
+    <Page Include="MainWindow.xaml">
+      <SubType>Designer</SubType>
+    </Page>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="pch.cpp">
+      <PrecompiledHeader>Create</PrecompiledHeader>
+    </ClCompile>
+    <ClCompile Include="App.xaml.cpp">
+      <DependentUpon>App.xaml</DependentUpon>
+    </ClCompile>
+    <ClCompile Include="MainWindow.xaml.cpp">
+      <DependentUpon>MainWindow.xaml</DependentUpon>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Midl Include="MainWindow.idl">
+      <DependentUpon>MainWindow.xaml</DependentUpon>
+      <SubType>Code</SubType>
+    </Midl>
+  </ItemGroup>
+  <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <ProjectCapability Include="Msix" />
+  </ItemGroup>
+  <PropertyGroup Condition="'$(DisableHasPackageAndPublishMenuAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
+    <HasPackageAndPublishMenu>true</HasPackageAndPublishMenu>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <MultiProcMIDL>true</MultiProcMIDL>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <MultiProcMIDL>true</MultiProcMIDL>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Import Project="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.winui\1.8.260803003\buildTransitive\Microsoft.UI.Xaml.Markup.Compiler.interop.targets" />
+  <Import Project="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.winui\1.8.260803003\buildTransitive\native\Microsoft.WinUI.References.targets" />
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Windows.CppWinRT" Version="3.0.260818.1" />
+    <PackageReference Include="Microsoft.Windows.ImplementationLibrary" Version="1.0.260126.7" />
+    <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.4654" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260804001" />
+  </ItemGroup>
+  <!--
+    The native (C++/WinRT) XAML build rules normally live in the UWP C++ toolset
+    (Microsoft.Windows.UI.Xaml.Cpp.Targets), which is not installed here. The
+    interop targets only wire MarkupCompilePass1/2 into the *managed* build via
+    $(PrepareResourcesDependsOn). For native builds we must run both passes
+    ourselves after MIDL + CppWinRT have merged the project winmd, and before
+    ClCompile consumes the generated code.
+  -->
+  <PropertyGroup>
+    <BuildCompileTargets>
+      XamlPreCompile;
+      $(BuildCompileTargets);
+    </BuildCompileTargets>
+  </PropertyGroup>
+  <Target Name="XamlPreCompile" DependsOnTargets="GetWinUIMetadataReferences;MarkupCompilePass1;MarkupCompilePass2">
+    <ItemGroup>
+      <ClCompile Remove="@(XamlGFiles)" />
+      <ClCompile Remove="@(GeneratedXamlPagesFiles)" />
+    </ItemGroup>
+    <ItemGroup>
+      <ClCompile Include="@(GeneratedXamlPagesFiles)" Condition="'%(Extension)' == '.cpp'" />
+      <ClCompile Include="@(XamlGFiles)" Condition="'%(Extension)' == '.cpp'" />
+      <ClCompile Include="@(XamlGFiles)" Condition="'%(Extension)' == '.hpp'" />
+      <ClCompile Include="@(_GeneratedCodeFiles)" Condition="'%(Extension)' == '.cpp'" />
+      <ClCompile Include="$(XamlGeneratedOutputPath)MainWindow.xaml.g.hpp" Condition="Exists('$(XamlGeneratedOutputPath)MainWindow.xaml.g.hpp')" />
+    </ItemGroup>
+    <Message Text="XamlPreCompile ClCompile: '@(ClCompile)'" Importance="high" />
+  </Target>
+  <!--
+    The WinUI Reference items do not flow into @(ReferencePath)/@(WinMDReferenceToCompile)
+    for native (C++/WinRT) builds, so the XAML compiler cannot resolve the
+    Microsoft.UI.Xaml metadata by itself. Feed it the metadata winmds directly.
+  -->
+  <Target Name="GetWinUIMetadataReferences">
+    <ItemGroup>
+      <ReferencePath Include="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.winui\1.8.260803003\metadata\Microsoft.UI.Xaml.winmd">
+        <WinMDFile>true</WinMDFile>
+        <CopyLocal>false</CopyLocal>
+      </ReferencePath>
+      <ReferencePath Include="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.winui\1.8.260803003\metadata\Microsoft.UI.Text.winmd">
+        <WinMDFile>true</WinMDFile>
+        <CopyLocal>false</CopyLocal>
+      </ReferencePath>
+      <ReferencePath Include="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.interactiveexperiences\1.8.260708001\metadata\10.0.17763.0\Microsoft.UI.winmd">
+        <WinMDFile>true</WinMDFile>
+        <CopyLocal>false</CopyLocal>
+      </ReferencePath>
+      <ReferencePath Include="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.interactiveexperiences\1.8.260708001\metadata\10.0.17763.0\Microsoft.Foundation.winmd">
+        <WinMDFile>true</WinMDFile>
+        <CopyLocal>false</CopyLocal>
+      </ReferencePath>
+      <ReferencePath Include="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.interactiveexperiences\1.8.260708001\metadata\10.0.17763.0\Microsoft.Graphics.winmd">
+        <WinMDFile>true</WinMDFile>
+        <CopyLocal>false</CopyLocal>
+      </ReferencePath>
+      <ReferencePath Include="C:\Program Files (x86)\Windows Kits\10\UnionMetadata\10.0.26100.0\Windows.winmd">
+        <WinMDFile>true</WinMDFile>
+        <CopyLocal>false</CopyLocal>
+      </ReferencePath>
+      <ReferencePath Condition="Exists('C:\Program Files (x86)\Windows Kits\10\References\10.0.26100.0')" Include="C:\Program Files (x86)\Windows Kits\10\References\10.0.26100.0\**\*.winmd">
+        <WinMDFile>true</WinMDFile>
+        <CopyLocal>false</CopyLocal>
+      </ReferencePath>
+      <XamlReferencesToCompile Include="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.winui\1.8.260803003\metadata\Microsoft.UI.Xaml.winmd" />
+      <XamlReferencesToCompile Include="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.winui\1.8.260803003\metadata\Microsoft.UI.Text.winmd" />
+      <XamlReferencesToCompile Include="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.interactiveexperiences\1.8.260708001\metadata\10.0.17763.0\Microsoft.UI.winmd" />
+      <XamlReferencesToCompile Include="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.interactiveexperiences\1.8.260708001\metadata\10.0.17763.0\Microsoft.Foundation.winmd" />
+      <XamlReferencesToCompile Include="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.interactiveexperiences\1.8.260708001\metadata\10.0.17763.0\Microsoft.Graphics.winmd" />
+      <XamlReferencesToCompile Include="C:\Program Files (x86)\Windows Kits\10\UnionMetadata\10.0.26100.0\Windows.winmd" />
+    </ItemGroup>
+  </Target>
+</Project>

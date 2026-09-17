@@ -48,7 +48,6 @@ private:
     wxListBox   *device_list_ = nullptr;
     wxChoice    *codec_ctrl_ = nullptr;
     wxChoice    *quality_ctrl_ = nullptr;
-    wxCheckBox  *abr_ctrl_ = nullptr;
     wxChoice    *sample_rate_ctrl_ = nullptr;
     wxChoice    *bit_depth_ctrl_ = nullptr;
     wxChoice    *capture_ctrl_ = nullptr;

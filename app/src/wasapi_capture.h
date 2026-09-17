@@ -2,7 +2,7 @@
  * WASAPI Loopback Audio Capture
  *
  * Captures system audio output using Windows Audio Session API (WASAPI)
- * in loopback mode, providing PCM data for LDAC encoding.
+ * in loopback mode, providing PCM data for the active codec encoder.
  *
  * SPDX-License-Identifier: MIT
  */
@@ -52,6 +52,11 @@ public:
     uint32_t get_channels() const { return channels_; }
     uint32_t get_bits_per_sample() const { return bits_per_sample_; }
 
+    /* Mute/unmute the default render endpoint (speakers).
+     * Used by the "auto-mute output" feature so loopback still captures
+     * the audio for the headphones while the speaker goes silent. */
+    bool mute_output(bool mute);
+
 private:
     static DWORD WINAPI capture_thread_proc(LPVOID param);
     void capture_loop();
@@ -71,6 +76,7 @@ private:
     HANDLE thread_handle_ = nullptr;
     HANDLE stop_event_ = nullptr;
     HANDLE buffer_event_ = nullptr;  /* signaled by WASAPI when data is ready */
+    bool event_mode_ = false;
     AudioCallback callback_;
 
 };

@@ -93,12 +93,9 @@ void ProfileDialog::create_ui() {
     codec_label->SetToolTip(wxString::FromUTF8(L("tooltip.codec")));
     codec_grid->Add(codec_label, 0, wxALIGN_CENTER_VERTICAL);
     codec_ctrl_ = new wxChoice(this, wxID_ANY);
-    codec_ctrl_->Append(wxString::FromUTF8(L("codec.auto")));
-    codec_ctrl_->Append(wxString::FromUTF8(L("codec.ldac")));
-    codec_ctrl_->Append(wxString::FromUTF8(L("codec.aptx_hd")));
-    codec_ctrl_->Append(wxString::FromUTF8(L("codec.aptx_ll")));
-    codec_ctrl_->Append(wxString::FromUTF8(L("codec.sbc")));
+    codec_ctrl_->Append(wxString::FromUTF8(L("codec.ssc")));
     codec_ctrl_->Append(wxString::FromUTF8(L("codec.aac")));
+    codec_ctrl_->Append(wxString::FromUTF8(L("codec.sbc")));
     codec_ctrl_->SetSelection(0);
     codec_ctrl_->Bind(wxEVT_CHOICE, &ProfileDialog::OnCodecChange, this);
     codec_grid->Add(codec_ctrl_, 1, wxEXPAND);
@@ -113,12 +110,6 @@ void ProfileDialog::create_ui() {
     quality_ctrl_->Append(wxString::FromUTF8(L("quality.mobile")));
     quality_ctrl_->SetSelection(0);
     codec_grid->Add(quality_ctrl_, 1, wxEXPAND);
-
-    /* ABR */
-    codec_grid->Add(new wxStaticText(this, wxID_ANY, ""), 0);
-    abr_ctrl_ = new wxCheckBox(this, wxID_ANY, wxString::FromUTF8(L("connection.abr")));
-    abr_ctrl_->SetToolTip(wxString::FromUTF8(L("tooltip.abr")));
-    codec_grid->Add(abr_ctrl_, 0);
 
     /* Sample rate */
     auto *sr_label = new wxStaticText(this, wxID_ANY, wxString::FromUTF8(L("connection.sample_rate")));
@@ -224,7 +215,6 @@ void ProfileDialog::populate_from_profile(const ConnectionProfile &p) {
     devname_ctrl_->SetValue(wxString::FromUTF8(p.device_name));
     codec_ctrl_->SetSelection(ProfileManager::codec_to_index(p.codec));
     quality_ctrl_->SetSelection(ProfileManager::quality_to_index(p.quality));
-    abr_ctrl_->SetValue(p.abr);
 
     int sr_idx = (p.sample_rate == 44100) ? 1 :
                  (p.sample_rate == 48000) ? 2 :
@@ -271,32 +261,30 @@ void ProfileDialog::populate_from_profile(const ConnectionProfile &p) {
 }
 
 void ProfileDialog::update_codec_dependent() {
-    int codec_idx = codec_ctrl_->GetSelection();
-    bool is_ldac = (codec_idx == 1);
-    bool quality_enabled = (codec_idx == 0 || codec_idx == 1 || codec_idx == 4 || codec_idx == 5);
-    bool abr_enabled = (codec_idx == 0 || codec_idx == 1);
+    int codec_idx = codec_ctrl_->GetSelection(); /* 0=SSC, 1=AAC, 2=SBC */
+    bool uhq_capable = (codec_idx == 0);
 
     /* Rebuild quality items with codec-specific bitrate info */
     int cur_q = quality_ctrl_->GetSelection();
     quality_ctrl_->Clear();
     /* Bitrates per quality: [High, Standard, Mobile] in kbps */
     switch (codec_idx) {
-    case 1: /* LDAC */
-        quality_ctrl_->Append(wxString::Format("%s (990kbps)", wxString::FromUTF8(L("quality.high"))));
-        quality_ctrl_->Append(wxString::Format("%s (660kbps)", wxString::FromUTF8(L("quality.standard"))));
-        quality_ctrl_->Append(wxString::Format("%s (330kbps)", wxString::FromUTF8(L("quality.mobile"))));
+    case 0: /* SSC (48 kHz basic; 96 kHz UHQ via sample rate) */
+        quality_ctrl_->Append(wxString::Format("%s (229kbps)", wxString::FromUTF8(L("quality.high"))));
+        quality_ctrl_->Append(wxString::Format("%s (192kbps)", wxString::FromUTF8(L("quality.standard"))));
+        quality_ctrl_->Append(wxString::Format("%s (128kbps)", wxString::FromUTF8(L("quality.mobile"))));
         break;
-    case 5: /* AAC */
+    case 1: /* AAC */
         quality_ctrl_->Append(wxString::Format("%s (256kbps)", wxString::FromUTF8(L("quality.high"))));
         quality_ctrl_->Append(wxString::Format("%s (192kbps)", wxString::FromUTF8(L("quality.standard"))));
         quality_ctrl_->Append(wxString::Format("%s (128kbps)", wxString::FromUTF8(L("quality.mobile"))));
         break;
-    case 4: /* SBC */
+    case 2: /* SBC */
         quality_ctrl_->Append(wxString::Format("%s (~345kbps)", wxString::FromUTF8(L("quality.high"))));
         quality_ctrl_->Append(wxString::Format("%s (~240kbps)", wxString::FromUTF8(L("quality.standard"))));
         quality_ctrl_->Append(wxString::Format("%s (~150kbps)", wxString::FromUTF8(L("quality.mobile"))));
         break;
-    default: /* Auto or codecs without quality control */
+    default:
         quality_ctrl_->Append(wxString::FromUTF8(L("quality.high")));
         quality_ctrl_->Append(wxString::FromUTF8(L("quality.standard")));
         quality_ctrl_->Append(wxString::FromUTF8(L("quality.mobile")));
@@ -307,11 +295,7 @@ void ProfileDialog::update_codec_dependent() {
     else
         quality_ctrl_->SetSelection(0);
 
-    quality_ctrl_->Enable(quality_enabled);
-    abr_ctrl_->Enable(abr_enabled);
-    abr_ctrl_->SetForegroundColour(TM().get(abr_enabled ? ThemeColor::TextPrimary : ThemeColor::TextMuted));
-    abr_ctrl_->Refresh();
-    if (!abr_enabled) abr_ctrl_->SetValue(false);
+    quality_ctrl_->Enable(true);
 
     /* Sample rate options */
     int cur_sr = sample_rate_ctrl_->GetSelection();
@@ -319,7 +303,7 @@ void ProfileDialog::update_codec_dependent() {
     sample_rate_ctrl_->Append(wxString::FromUTF8(L("codec.auto")));
     sample_rate_ctrl_->Append("44100 Hz");
     sample_rate_ctrl_->Append("48000 Hz");
-    if (is_ldac) {
+    if (uhq_capable) {
         sample_rate_ctrl_->Append("88200 Hz");
         sample_rate_ctrl_->Append("96000 Hz");
     }
@@ -328,18 +312,14 @@ void ProfileDialog::update_codec_dependent() {
     else
         sample_rate_ctrl_->SetSelection(0);
 
-    /* Bit depth */
-    bool bd_enabled = (codec_idx == 1);
+    /* Bit depth (stored per profile; sample width is fixed per codec at runtime) */
     int cur_bd = bit_depth_ctrl_->GetSelection();
     bit_depth_ctrl_->Clear();
-    if (bd_enabled) {
-        bit_depth_ctrl_->Append(wxString::FromUTF8(L("codec.auto")));
-        bit_depth_ctrl_->Append(wxString::FromUTF8(L("bitdepth.16")));
-        bit_depth_ctrl_->Append(wxString::FromUTF8(L("bitdepth.24")));
-    } else {
-        bit_depth_ctrl_->Append(wxString::FromUTF8(L("bitdepth.16")));
-    }
-    bit_depth_ctrl_->Enable(bd_enabled);
+    bit_depth_ctrl_->Append(wxString::FromUTF8(L("codec.auto")));
+    bit_depth_ctrl_->Append(wxString::FromUTF8(L("bitdepth.16")));
+    bit_depth_ctrl_->Append(wxString::FromUTF8(L("bitdepth.24")));
+    bit_depth_ctrl_->Append(wxString::FromUTF8(L("bitdepth.32")));
+    bit_depth_ctrl_->Enable(true);
     if (cur_bd >= 0 && cur_bd < bit_depth_ctrl_->GetCount())
         bit_depth_ctrl_->SetSelection(cur_bd);
     else
@@ -560,22 +540,21 @@ void ProfileDialog::OnSave(wxCommandEvent &) {
     p.device_name = devname_ctrl_->GetValue().utf8_string();
 
     /* Auto-generate internal name from device + codec */
-    static const char *codec_short[] = { "Auto", "LDAC", "aptX HD", "aptX LL", "SBC", "AAC" };
+    static const char *codec_short[] = { "SSC", "AAC", "SBC" };
     std::string auto_name = p.device_name.empty() ? p.device_address : p.device_name;
     int ci = codec_ctrl_->GetSelection();
-    if (ci >= 0 && ci <= 5) { auto_name += " "; auto_name += codec_short[ci]; }
+    if (ci >= 0 && ci <= 2) { auto_name += " "; auto_name += codec_short[ci]; }
     p.name = auto_name;
     p.codec = ProfileManager::index_to_codec(codec_ctrl_->GetSelection());
     p.quality = ProfileManager::index_to_quality(quality_ctrl_->GetSelection());
-    p.abr = abr_ctrl_->GetValue();
 
     static const uint32_t rate_values[] = { 0, 44100, 48000, 88200, 96000 };
     int sr_sel = sample_rate_ctrl_->GetSelection();
     p.sample_rate = (sr_sel >= 0 && sr_sel <= 4) ? rate_values[sr_sel] : 0;
 
-    static const uint32_t bd_values[] = { 0, 16, 24 };
+    static const uint32_t bd_values[] = { 0, 16, 24, 32 };
     int bd_sel = bit_depth_ctrl_->GetSelection();
-    p.bit_depth = (bd_sel >= 0 && bd_sel <= 2) ? bd_values[bd_sel] : 0;
+    p.bit_depth = (bd_sel >= 0 && bd_sel <= 3) ? bd_values[bd_sel] : 0;
 
     p.capture_mode = ProfileManager::index_to_capture_mode(capture_ctrl_->GetSelection());
 

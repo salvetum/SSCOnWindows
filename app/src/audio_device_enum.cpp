@@ -411,3 +411,57 @@ AudioDeviceFormat AudioDeviceEnumerator::get_device_format(const std::wstring &d
     enumerator->Release();
     return fmt;
 }
+
+/* ------------------------------------------------------------------ */
+/*  get_device_peak()                                                 */
+/* ------------------------------------------------------------------ */
+
+float AudioDeviceEnumerator::get_device_peak(const std::wstring &device_id) {
+    IMMDeviceEnumerator *enumerator = nullptr;
+    HRESULT hr = CoCreateInstance(
+        CLSID_MMDeviceEnumerator_, nullptr, CLSCTX_ALL,
+        IID_IMMDeviceEnumerator_, reinterpret_cast<void **>(&enumerator));
+    if (FAILED(hr)) return -1.0f;
+
+    IMMDevice *device = nullptr;
+    if (device_id.empty()) {
+        hr = enumerator->GetDefaultAudioEndpoint(eRender, eConsole, &device);
+    } else {
+        hr = enumerator->GetDevice(device_id.c_str(), &device);
+    }
+    if (FAILED(hr) || !device) {
+        enumerator->Release();
+        return -1.0f;
+    }
+
+    /* Activate IAudioMeterInformation on this endpoint */
+    static const IID IID_IAudioMeterInformation_ =
+        {0xC02216F6, 0x8C67, 0x4B5B,
+         {0x9D, 0x00, 0xD0, 0x08, 0xE7, 0x3E, 0x00, 0x64}};
+
+    IUnknown *unk = nullptr;
+    hr = device->Activate(IID_IAudioMeterInformation_, CLSCTX_ALL, nullptr,
+                          reinterpret_cast<void **>(&unk));
+    if (FAILED(hr) || !unk) {
+        device->Release();
+        enumerator->Release();
+        return -1.0f;
+    }
+
+    struct IAudioMeterInformation : public IUnknown {
+        virtual HRESULT STDMETHODCALLTYPE GetPeakValue(float *peak) = 0;
+        virtual HRESULT STDMETHODCALLTYPE GetMeteringChannelCount(UINT *count) = 0;
+        virtual HRESULT STDMETHODCALLTYPE GetChannelsPeakValues(UINT count, float *peaks) = 0;
+        virtual HRESULT STDMETHODCALLTYPE QueryHardwareSupport(DWORD *mask) = 0;
+    };
+    auto *meter = reinterpret_cast<IAudioMeterInformation *>(unk);
+
+    float peak = -1.0f;
+    hr = meter->GetPeakValue(&peak);
+    if (FAILED(hr)) peak = -1.0f;
+
+    unk->Release();
+    device->Release();
+    enumerator->Release();
+    return peak;
+}

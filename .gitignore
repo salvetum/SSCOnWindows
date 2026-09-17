@@ -1,5 +1,6 @@
 # Build output
 build/
+build_msvc/
 out/
 x64/
 Debug/
@@ -9,8 +10,15 @@ CMakeCache.txt
 cmake_install.cmake
 Makefile
 
+# Distribution / deployed payload
+dist/
+winui3/bin/
+winui3/obj/
+*.winmd
+
 # IDE / Editor
 .vs/
+winui3/.vs/
 .vscode/
 .idea/
 *.user
@@ -18,6 +26,18 @@ Makefile
 *.sln
 *.vcxproj
 *.vcxproj.filters
+
+# Keep the WinUI 3 project files (source, not generated)
+!winui3/A2DPWBWinUI.vcxproj
+!winui3/A2DPWBWinUI.sln
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Local runtime config (contains user's device MAC)
+config.json
 
 # Compiled objects
 *.obj

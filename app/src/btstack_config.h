@@ -2,7 +2,7 @@
  * btstack_config.h - BTstack compile-time configuration for A2DPWB
  *
  * Minimal configuration for Classic Bluetooth A2DP Source
- * with high-quality codecs (LDAC, aptX HD, aptX LL) over WinUSB.
+ * with SSC / AAC / SBC codecs over WinUSB.
  *
  * SPDX-License-Identifier: MIT
  */
@@ -39,11 +39,11 @@
 #define NVM_NUM_LINK_KEYS          16
 
 /* A2DP explicit config: disable SBC auto-selection, allow vendor codec config.
- * Required for LDAC/aptX — BTstack's auto-mode only handles SBC. */
+ * Required for SSC — BTstack's auto-mode only handles SBC. */
 #define ENABLE_A2DP_EXPLICIT_CONFIG
 
-/* A2DP: 5 stream endpoints (LDAC, aptX HD, aptX LL, SBC, AAC) */
-#define MAX_NR_AVDTP_STREAM_ENDPOINTS  5
+/* A2DP: stream endpoints (SSC vendor + AAC + SBC) */
+#define MAX_NR_AVDTP_STREAM_ENDPOINTS  4
 #define MAX_NR_AVDTP_CONNECTIONS       1
 #define MAX_NR_A2DP_SOURCE_CONNECTIONS 1
 

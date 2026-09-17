@@ -1,4 +1,4 @@
----
+﻿---
 title: Setup
 layout: default
 nav_order: 2
@@ -18,22 +18,24 @@ nav_order: 2
 ## Prerequisites
 
 - **Windows 10/11** (x64)
-- **Dedicated USB Bluetooth adapter** (separate from built-in Bluetooth)
-- **Zadig** ([https://zadig.akeo.ie/](https://zadig.akeo.ie/))
+- A **dedicated USB Bluetooth adapter** (separate from your built-in Bluetooth)
+- For SSC streaming: **WSL2** with a Linux distro (default path) or **Python 3.14 + Qiling** (native path)
 
-## Step 1: Install WinUSB Driver
+## Step 1: Switch the dongle to WinUSB
 
-A2DPWB communicates directly with a USB Bluetooth adapter via WinUSB. You need a **dedicated adapter** -- your built-in Bluetooth continues to work normally for regular Windows Bluetooth.
+SSC On Windows talks directly to a USB Bluetooth adapter via WinUSB. You need a
+**dedicated adapter**; your built-in Bluetooth keeps working for normal Windows
+peripherals. No Zadig is required -- the app installs (and can remove) the driver.
 
-1. Plug in a USB Bluetooth adapter
-2. Download and open [Zadig](https://zadig.akeo.ie/)
-3. Go to **Options > List All Devices**
-4. Select your USB Bluetooth adapter from the dropdown
-5. Select **WinUSB** as the target driver
-6. Click **Replace Driver**
+1. Plug in the dedicated USB Bluetooth adapter
+2. Launch `SSCOnWindows.exe`
+3. In the **Streaming Mode (Dongle)** panel, click **Enable Streaming (WinUSB)**
+4. Accept the UAC prompt (a self-signed WinUSB INF + catalog is generated, signed and installed)
+
+To revert, click **Restore Windows BT (BTHUSB)**.
 
 {: .warning }
-While the adapter is in WinUSB mode, Windows cannot use it for regular Bluetooth. Use your built-in Bluetooth for normal peripherals (keyboard, mouse, etc.).
+Never switch the driver on your PC's **built-in** Bluetooth adapter -- doing so disables all normal Bluetooth (keyboard, mouse, audio) and may require Device Manager or system recovery to restore. Always use a separate, dedicated dongle.
 
 ## Step 2: Find Your Headphone's Bluetooth Address
 
@@ -41,28 +43,26 @@ You need the Bluetooth MAC address of your headphones/speakers.
 
 **From Windows Settings:**
 1. Open **Settings > Bluetooth & devices**
-2. Click on your audio device
-3. Click **Properties**
-4. The Bluetooth address is shown (format: `AA:BB:CC:DD:EE:FF`)
+2. Click your audio device
+3. Click **Properties** -- the address is shown as `AA:BB:CC:DD:EE:FF`
 
-**From A2DPWB GUI:**
-- Launch `A2DPWB.exe` and paired Bluetooth audio devices are listed in the device dropdown
+**From the GUI:** paired Bluetooth audio devices appear in the device list after a scan.
 
-**From CLI:**
+**From the CLI:**
 ```
-A2DPWB.exe --cli -l
+SSCOnWindows-0.1.exe --cli -l
 ```
 
-## Step 3: Run A2DPWB
+## Step 3: Run
 
 **GUI:**
 ```
-A2DPWB.exe
+SSCOnWindows.exe
 ```
 
 **CLI:**
 ```
-A2DPWB.exe --cli -d AA:BB:CC:DD:EE:FF
+SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF
 ```
 
 See [Usage](usage) for full details.
@@ -71,21 +71,33 @@ See [Usage](usage) for full details.
 
 ## Firmware (Realtek Adapters)
 
-Realtek-based USB Bluetooth adapters (e.g., TP-Link UB500, RTL8761BU dongles) require proprietary firmware to operate. **Intel and CSR adapters do not need this step.**
-
-### GUI (Guided Download)
-
-Launch `A2DPWB.exe` and open **Firmware** dialog. If firmware is missing, a warning is displayed. Use the **Open Download Page** button to open the [linux-firmware/rtl_bt](https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/tree/rtl_bt) page in your browser, then use **Open Config Folder** to open the destination folder. Download the required `.bin` files and place them in the config folder.
-
-The dialog auto-detects your adapter chipset and shows which firmware files are needed.
+Realtek-based adapters (e.g. TP-Link UB500, RTL8761BU dongles) require proprietary
+firmware. **Intel and CSR adapters do not need this step.**
 
 ### Manual Download
 
-1. Download the firmware and config `.bin` files for your chipset from [linux-firmware/rtl_bt](https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/tree/rtl_bt) (e.g., `rtl8761bu_fw.bin` and `rtl8761bu_config.bin`)
-2. Place both files in the A2DPWB config folder (same directory as `A2DPWB.exe`, or the path shown in the Firmware dialog)
+1. Download the firmware and config `.bin` files for your chipset from
+   [linux-firmware/rtl_bt](https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/tree/rtl_bt)
+   (e.g. `rtl8761bu_fw.bin`, `rtl8761bu_config.bin`)
+2. Place both in the config folder `%APPDATA%\A2DPWB`
 
 {: .note }
 These firmware files are proprietary Realtek binaries distributed via the linux-firmware project. They are not included in this repository. See [WHENCE](https://git.kernel.org/pub/scm/linux/kernel/git/firmware/linux-firmware.git/tree/WHENCE) for redistribution terms.
+
+---
+
+## SSC Encoder Daemon
+
+The SSC encoder is the Samsung aarch64 blob, so it runs behind a local TCP daemon
+(`:20248`). Two backends are supported:
+
+| Backend | How | Notes |
+|:--------|:----|:------|
+| WSL2 (default) | Blob + helper under `qemu-aarch64` inside WSL2 | Fastest (~1.2 ms RTT); needed for UHQ |
+| Qiling native (`--ssc-native`) | `tools/ssc_daemon/sscblobd.py` under `py -3.14` | No WSL2; ~5x slower, 96 kHz marginal |
+
+The Windows side starts the daemon automatically. For the WSL2 path, a distro must
+be installed and running.
 
 ---
 
@@ -93,8 +105,8 @@ These firmware files are proprietary Realtek binaries distributed via the linux-
 
 | Chipset | Example Products | Notes |
 |:--------|:-----------------|:------|
-| Intel | Intel AX200/AX210 | Works out of the box, no firmware needed |
-| CSR | Generic CSR8510 dongles | Works out of the box, no firmware needed |
-| Realtek | TP-Link UB500, RTL8761BU | Requires firmware download (see above) |
+| Realtek | TP-Link UB500, RTL8761BU | Tested; requires firmware download |
+| Intel | Intel AX200/AX210 | No firmware needed |
+| CSR | Generic CSR8510 dongles | No firmware needed |
 
-USB Bluetooth 5.0+ adapters generally work best for high-bitrate codecs like LDAC.
+USB Bluetooth 5.0+ adapters are recommended.

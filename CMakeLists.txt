@@ -1,73 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
-project(a2dpwb VERSION 1.0.1 LANGUAGES C CXX)
+project(a2dpwb VERSION 0.1 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
-
-# Options
-option(LDAC_SOFT_FLOAT "Use software floating point for libldac" OFF)
-
-# --- libldac encoder library ---
-# Build libldac from AOSP source in extern/libldac/
-set(LDAC_SRC_DIR ${CMAKE_SOURCE_DIR}/extern/libldac)
-
-if(EXISTS ${LDAC_SRC_DIR}/src/ldaclib.c)
-    # Only compile the two top-level files per AOSP Android.bp.
-    # Other .c files (tables, quantization, etc.) are #included internally
-    # via DECLFUNC (static) linkage — compiling them separately causes
-    # undefined symbol errors.
-    add_library(ldac STATIC
-        ${LDAC_SRC_DIR}/src/ldaclib.c
-        ${LDAC_SRC_DIR}/src/ldacBT.c
-    )
-    target_include_directories(ldac PUBLIC
-        ${LDAC_SRC_DIR}/inc
-    )
-    target_include_directories(ldac PRIVATE
-        ${LDAC_SRC_DIR}/src
-    )
-
-    # ABR (Adaptive Bit Rate) support
-    if(EXISTS ${LDAC_SRC_DIR}/abr/src/ldacBT_abr.c)
-        target_sources(ldac PRIVATE ${LDAC_SRC_DIR}/abr/src/ldacBT_abr.c)
-        target_include_directories(ldac PUBLIC ${LDAC_SRC_DIR}/abr/inc)
-    endif()
-    target_compile_definitions(ldac PRIVATE
-        $<$<BOOL:${LDAC_SOFT_FLOAT}>:_LDAC_SOFT_FLOAT_>
-    )
-    if(MSVC)
-        # Provide unistd.h shim for AOSP code that includes it
-        target_include_directories(ldac PRIVATE ${CMAKE_SOURCE_DIR}/compat/msvc)
-        # Force-include compatibility header to handle GCC __attribute__ etc.
-        target_compile_options(ldac PRIVATE /W3
-            /FI${CMAKE_SOURCE_DIR}/compat/msvc/ldac_compat.h)
-    else()
-        target_compile_options(ldac PRIVATE -Wall -Wextra -O2)
-    endif()
-    message(STATUS "libldac: Found and configured")
-else()
-    message(WARNING "libldac not found at ${LDAC_SRC_DIR}. "
-        "Run: git submodule update --init --recursive")
-endif()
-
-# --- libopenaptx (aptX / aptX HD encoder) ---
-set(OPENAPTX_SRC_DIR ${CMAKE_SOURCE_DIR}/extern/libopenaptx)
-
-if(EXISTS ${OPENAPTX_SRC_DIR}/openaptx.c)
-    add_library(openaptx STATIC
-        ${OPENAPTX_SRC_DIR}/openaptx.c
-    )
-    target_include_directories(openaptx PUBLIC ${OPENAPTX_SRC_DIR})
-    if(MSVC)
-        target_compile_options(openaptx PRIVATE /W3)
-    else()
-        target_compile_options(openaptx PRIVATE -Wall -Wextra -O2)
-    endif()
-    message(STATUS "libopenaptx: Found and configured")
-else()
-    message(WARNING "libopenaptx not found at ${OPENAPTX_SRC_DIR}. "
-        "Run: git submodule add https://github.com/pali/libopenaptx.git extern/libopenaptx")
-endif()
 
 # --- BTstack Bluetooth stack (user-mode HCI/L2CAP/AVDTP via WinUSB) ---
 set(BTSTACK_ROOT ${CMAKE_SOURCE_DIR}/extern/btstack)

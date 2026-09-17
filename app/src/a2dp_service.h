@@ -27,7 +27,6 @@
 class BtStackTransport;
 class WasapiCapture;
 class AudioEncoder;
-class LdacEncoder;
 
 class A2dpService {
 public:
@@ -63,14 +62,43 @@ public:
         uint32_t    source_bit_depth = 0;
     };
 
+    /* Live stream statistics (1 Hz refresh) */
+    struct StreamStats {
+        double latency_ms = 0.0;   /* encode round-trip (EWMA) */
+        double error_rate = 0.0;   /* send failures / total sends (0..1) */
+        double loss_rate  = 0.0;   /* ring overflow drops / captured (0..1) */
+        uint32_t bitrate_kbps = 0; /* current effective bitrate */
+        uint32_t queue_depth = 0;  /* transport queue depth */
+        uint64_t total_sends = 0;
+        uint64_t send_fails = 0;
+        uint64_t captured_frames = 0;
+        uint64_t dropped_frames = 0;
+        uint64_t encode_calls = 0;
+    };
+
     /* ---- Callbacks (called from worker threads, must be thread-safe) ---- */
     using StateCallback = std::function<void(State state, const std::string &status_text)>;
     using StreamInfoCallback = std::function<void(const StreamInfo &info)>;
     using ScanCompleteCallback = std::function<void()>;
+    using StatsCallback = std::function<void(const StreamStats &stats)>;
 
     void set_state_callback(StateCallback cb);
     void set_stream_info_callback(StreamInfoCallback cb);
     void set_scan_complete_callback(ScanCompleteCallback cb);
+    void set_stats_callback(StatsCallback cb);
+
+    /* ---- Device volume (AVRCP absolute volume, drives the headphones) ----
+     * 0.0 = mute .. 1.0 = max. Requires an active AVRCP connection. */
+    void set_device_volume(float volume);
+    float get_device_volume() const;
+    uint8_t get_absolute_volume() const;   /* 0-127, 0 = unknown */
+
+    using VolumeChangedCallback = std::function<void(uint8_t vol_0_127)>;
+    void set_volume_changed_callback(VolumeChangedCallback cb);
+
+    /* ---- Auto-mute output (Bölüm 1) ---- */
+    void set_auto_mute_output(bool enabled);
+    bool get_auto_mute_output() const { return auto_mute_output_; }
 
     /* ---- Streaming control ---- */
     void start_streaming(const ConnectionProfile &profile);
@@ -126,6 +154,11 @@ private:
     void streaming_thread_func();
     void streaming_thread_func_inner();
 
+    /* Persist the current link key for a device into its connection profile
+     * (5.6). addr_le: little-endian BTH_ADDR bytes. Called after connect and
+     * after disconnect so re-pairing never loses the stored key. */
+    void persist_link_key(const uint8_t addr_le[6]);
+
     /* ---- State ---- */
     std::atomic<State> state_{State::Idle};
 
@@ -133,6 +166,8 @@ private:
     StateCallback state_cb_;
     StreamInfoCallback stream_info_cb_;
     ScanCompleteCallback scan_complete_cb_;
+    StatsCallback stats_cb_;
+    VolumeChangedCallback volume_cb_;
     std::mutex cb_mutex_;
 
     void notify_state(State s, const std::string &text);
@@ -157,6 +192,9 @@ private:
     /* ---- Active streaming profile (copied on start) ---- */
     ConnectionProfile active_profile_;
 
+    /* ---- Persistent profile store (link keys for 5.6) ---- */
+    ProfileManager profile_mgr_;
+
     /* ---- Audio device list ---- */
     std::vector<AudioDeviceInfo> audio_device_list_;
     std::wstring original_default_device_;
@@ -167,6 +205,7 @@ private:
 
     /* ---- Debug ---- */
     bool debug_mode_ = false;
+    bool auto_mute_output_ = true;  /* auto-mute speakers while streaming */
 
     /* ---- Firmware ---- */
     bool firmware_present_ = false;

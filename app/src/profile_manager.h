@@ -18,15 +18,17 @@ struct ConnectionProfile {
     std::string name;
     std::string device_address;   /* XX:XX:XX:XX:XX:XX */
     std::string device_name;
-    std::string codec;            /* auto, ldac, aptxhd, aptxll, sbc, aac */
+    std::string codec;            /* ssc, aac, sbc */
     std::string quality;          /* hq, sq, mq */
-    bool abr = false;
+    uint32_t    bitrate_kbps = 0; /* 0=auto (from quality), else explicit kbps */
     uint32_t sample_rate = 0;     /* 0=auto, 44100, 48000, 88200, 96000 */
     uint32_t bit_depth = 0;       /* 0=auto, 16, 24 */
     std::string capture_mode;     /* "loopback", "virtual" */
     std::string audio_device_id;  /* WASAPI device ID for virtual mode */
     std::string audio_device_name; /* display name */
     bool auto_switch_device = true;  /* auto-switch default for Virtual Device mode */
+    std::string link_key;         /* 32-hex persistent link key (empty = not stored) */
+    int link_key_type = 0;        /* link_key_type_t value (0 = combination key) */
 };
 
 class ProfileManager {
@@ -52,7 +54,7 @@ public:
     /* Find profile index by name. Returns -1 if not found. */
     int find_by_name(const std::string &name) const;
 
-    /* Convert codec string to combo index (0=Auto,1=LDAC,2=aptXHD,3=aptXLL,4=SBC,5=AAC) */
+    /* Convert codec string to combo index (0=SSC,1=AAC,2=SBC; unknown → 0) */
     static int codec_to_index(const std::string &codec);
 
     /* Convert combo index to codec string */
@@ -64,7 +66,7 @@ public:
     /* Convert combo index to quality string */
     static std::string index_to_quality(int index);
 
-    /* Convert bit depth value to combo index (0=Auto,1=16,2=24) */
+    /* Convert bit depth value to combo index (0=Auto,1=16,2=24,3=32) */
     static int bit_depth_to_index(uint32_t bit_depth);
 
     /* Convert combo index to bit depth value */

@@ -1,0 +1,24 @@
+#!/bin/bash
+# start_sscblobd - restart the SSC blob daemon with given params.
+# Usage: start_sscblobd <port> <sample-rate> <channels> <bitrate>
+set -u
+PORT="${1:-20248}"
+RATE="${2:-44100}"
+CH="${3:-2}"
+BR="${4:-192000}"
+BIN="$HOME/ssc/openssc/build_blob/sscblobd"
+LOG="$HOME/ssc/work/sscblobd.log"
+
+mkdir -p "$HOME/ssc/work"
+pkill -x sscblobd 2>/dev/null
+sleep 1
+setsid nohup "$BIN" "$PORT" "$RATE" "$CH" "$BR" >"$LOG" 2>&1 < /dev/null &
+disown 2>/dev/null || true
+sleep 2
+# bail out if it died immediately (e.g. helper failure)
+if ! pgrep -x sscblobd > /dev/null 2>&1; then
+    echo "sscblobd failed to start; log below" >&2
+    cat "$LOG" >&2 2>/dev/null
+    exit 1
+fi
+echo "sscblobd started: port=$PORT rate=$RATE ch=$CH br=$BR"

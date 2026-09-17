@@ -25,6 +25,7 @@ public:
     bool start_with_windows = false;
     bool start_minimized = false;
     bool minimize_to_tray = true;
+    bool auto_connect_on_start = false;
 
     /* Debug */
     bool debug_mode = false;
@@ -41,6 +42,10 @@ public:
 
     /* Window state */
     std::string last_profile;
+
+    /* Last device used (for "Reconnect Last" / auto-connect on start) */
+    std::string last_device_mac;
+    std::string last_device_name;
 
 private:
     std::string get_settings_path() const;

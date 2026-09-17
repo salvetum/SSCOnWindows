@@ -38,7 +38,7 @@ bool A2dpBridgeApp::OnInit() {
         std::string log_path = get_config_dir() + "\\debug.log";
         freopen(log_path.c_str(), "w", stderr);
         setvbuf(stderr, nullptr, _IONBF, 0);
-        fprintf(stderr, "=== A2DPWB started (debug mode) ===\n");
+        fprintf(stderr, "=== SSC On Windows started (debug mode) ===\n");
     } else {
         freopen("NUL", "w", stderr);
     }

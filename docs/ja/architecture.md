@@ -1,4 +1,4 @@
----
+﻿---
 title: アーキテクチャ
 layout: default
 parent: 日本語
@@ -18,27 +18,27 @@ nav_order: 4
 
 ## 概要
 
-A2DP Windows Bridge (A2DPWB) は Windows で LDAC、aptX HD、aptX Low Latency、AAC、SBC の Bluetooth オーディオを実現します。Windows は Bluetooth A2DP で SBC と AAC のみネイティブ対応ですが、このツールはカーネルドライバーなしで高音質コーデックを追加します。
+**SSC On Windows** は A2DP Windows Bridge のフォークです。Windows のシステム音声を **Samsung Scalable Codec (SSC)**、**AAC**、**SBC** で Bluetooth ヘッドホンへ、カーネルドライバーなしでストリーミングします。Windows は A2DP でネイティブには SBC と AAC のみ対応していますが、このプロジェクトは同じユーザーモードトランスポートの上に SSC を追加します。
 
-**BTstack + WinUSB** を使用 -- 完全にユーザーモードで動作し、ドライバー署名は不要です。
+**BTstack + WinUSB** を使用 -- 完全にユーザーモードで動作し、ドライバー署名は不要です。ストリーミングに Windows Bluetooth スタックは関与しません。
 
 ## トランスポート: BTstack + WinUSB
 
-Windows の Bluetooth スタックを完全にバイパスし、WinUSB（Microsoft 署名済み汎用 USB ドライバー）経由で USB Bluetooth アダプターと直接通信します。オープンソースの Bluetooth スタックである BTstack が HCI、L2CAP、AVDTP、A2DP をユーザーモードで実装します。
+専用の USB Bluetooth アダプターを Microsoft Bluetooth ドライバー（`BTHUSB`）から汎用 **WinUSB** ドライバーに切り替えます（アプリ内トグルが最小限の WinUSB INF を生成・署名・インストールします。Zadig は不要）。BTstack は HCI、L2CAP、AVDTP、A2DP、AVRCP をユーザーモードで実装します。
 
 **利点**:
-- ドライバー署名コスト不要
+- ドライバー署名コスト不要（アプリ内の自己署名 WinUSB INF + カタログを使用）
 - テスト署名モード不要
 - Secure Boot の無効化不要
 - すべてのコードがユーザーモードで動作（デバッグが容易）
 
 **トレードオフ**:
 - 専用の USB Bluetooth アダプターが必要（Windows 内蔵 Bluetooth とは別）
-- WinUSB モードのアダプターは Windows の通常の Bluetooth として使用不可
-- デバイスアドレスは手動入力か、内蔵アダプター経由で取得した Windows ペアリング済みデバイス一覧から選択
+- WinUSB に占有されている間、そのアダプターは Windows の通常の Bluetooth として使用不可
+- デバイスアドレスは手動入力か、Windows のペアリング済みデバイス一覧から選択
 
 **動作の流れ**:
-1. Zadig で USB Bluetooth アダプターに WinUSB ドライバーをインストール
+1. ユーザーがアプリからドングルを WinUSB に切り替える（ドライバースイッチ）
 2. BTstack が WinUSB API 経由で USB デバイスを開く
 3. BTstack が HCI コマンドで Bluetooth コントローラーを初期化
 4. (Realtek アダプター) 必要に応じてファームウェアをアップロード
@@ -49,30 +49,27 @@ Windows の Bluetooth スタックを完全にバイパスし、WinUSB（Microso
 ## モジュール構成
 
 ```
-A2DPWB.exe
-├── GUI レイヤー (wxWidgets)
-│   ├── wx_app              アプリエントリーポイント、イベントループ
-│   ├── wx_main_frame       メインウィンドウ（デバイス、コーデック、ステータス）
-│   ├── wx_profile_dialog   接続プロファイル管理
-│   ├── wx_settings_dialog  アプリケーション設定
-│   ├── wx_firmware_dialog  Realtek ファームウェアダウンロード
-│   ├── wx_about_dialog     バージョン情報 / ライセンス
-│   ├── wx_zadig_dialog     Zadig WinUSB インストールガイド
-│   ├── theme_manager       ライト / ダークテーマ対応
-│   └── localization        多言語化 (en, ja -- 埋め込み JSON)
+SSCOnWindows.exe (WinUI 3)  /  SSCOnWindows-0.1.exe (CLI)
+├── WinUI レイヤー (winui3/、C++/WinRT)
+│   ├── App / MainWindow     スキャン、接続、コーデック/品質/レート、音量、統計、ログ
+│   ├── Streaming Mode パネル  WinUSB / BTHUSB ドライバートグル
+│   └── Setup & Help         ペアリングガイド + FAQ
+│
+├── レガシー GUI レイヤー (wxWidgets)
+│   ├── wx_app / wx_main_frame / wx_profile_dialog
+│   └── wx_about_dialog / ローカライゼーション (en、ja -- 埋め込み JSON)
 │
 ├── コアレイヤー
 │   ├── a2dp_service        A2DP 接続ライフサイクル & ステートマシン
-│   ├── btstack_transport   BTstack 統合 (HCI, L2CAP, AVDTP, A2DP)
-│   ├── wasapi_capture      WASAPI ループバックオーディオキャプチャ
+│   ├── btstack_transport   BTstack 統合 (HCI, L2CAP, AVDTP, A2DP, AVRCP)
+│   ├── wasapi_capture      WASAPI ループバックオーディオキャプチャ + 自動ミュート
 │   ├── audio_encoder       エンコーダーインターフェース（抽象基底）
-│   │   ├── ldac_encoder        LDAC (libldac, ABR 対応)
-│   │   ├── aptxhd_encoder      aptX HD (libopenaptx)
-│   │   ├── aptxll_encoder      aptX Low Latency (libopenaptx)
-│   │   ├── aac_encoder         AAC-LC (fdk-aac, LATM トランスポート)
+│   │   ├── ssc_encoder         SSC (Samsung バイナリを TCP デーモン経由)
+│   │   ├── aac_encoder         AAC-LC (fdk-aac、LATM トランスポート)
 │   │   └── a2dp_sbc_encoder    SBC (BTstack Bluedroid)
-│   │
-│   ├── bt_device           Bluetooth デバイス情報（アドレス、名前、コーデック）
+│   ├── resampler           SSC UHQ（96 kHz）用の 2x SRC
+│   ├── driver_mode         ドングルのドライバーモード検出 (WinUSB vs BTHUSB)
+│   ├── driver_switch       WinUSB INF 生成 + 署名 + インストール/削除
 │   ├── bt_adapter_enum     USB Bluetooth アダプター列挙 (WinUSB)
 │   ├── audio_device_enum   WASAPI オーディオデバイス列挙
 │   └── profile_manager     接続プロファイル永続化 (JSON)
@@ -80,9 +77,7 @@ A2DPWB.exe
 ├── サポート
 │   ├── app_settings        永続アプリケーション設定 (JSON)
 │   ├── config_path         設定ファイルパス解決
-│   ├── system_integration  システムトレイ、自動起動
-│   ├── debug_log           デバッグログマクロ
-│   └── capture_mode        オーディオキャプチャモード定義
+│   └── debug_log           デバッグログマクロ
 │
 └── CLI モード
     └── main.cpp            CLI 引数パース、ヘッドレスストリーミング
@@ -94,11 +89,12 @@ A2DPWB.exe
 システム音声出力
        │
        ▼
- WASAPI ループバックキャプチャ (PCM 16-bit, 44.1/48 kHz)
+ WASAPI ループバックキャプチャ (float32、48 kHz)
        │
        ▼
- オーディオエンコーダー (LDAC / aptX HD / aptX LL / AAC / SBC)
+ エンコーダー (SSC / AAC / SBC)
        │
+       │  SSC: TCP :20248 → WSL2 (qemu-aarch64) または Qiling → libScalable_Encoder.so
        ▼
  A2DP Service → BtStackTransport::send_media()
        │
@@ -117,11 +113,12 @@ A2DPWB.exe
 ### A2DP Service (`a2dp_service.cpp`)
 
 接続ライフサイクルの中央管理:
-- コーデックネゴシエーション（自動選択またはユーザー指定）
+- コーデックネゴシエーション（要求コーデック、フォールバック優先度 SSC > AAC > SBC）
 - 全対応コーデックのストリームエンドポイント登録
 - 接続ステートマシン（idle → connecting → streaming → disconnecting）
 - 予期しない切断時の自動再接続ロジック
 - コーデック固有のフレーミングによるメディアパケット送信
+- AVRCP 絶対ボリューム（デバイスボリュームコールバック）
 
 ### BTstack Transport (`btstack_transport.cpp`)
 
@@ -130,32 +127,31 @@ A2DPWB.exe
 **役割**:
 - WinUSB HCI トランスポートで BTstack を初期化
 - 専用スレッドで BTstack イベントループを実行
-- ベンダーコーデックストリームエンドポイント (LDAC, aptX HD, aptX LL) を登録
+- コーデックストリームエンドポイント（SSC ベンダー固有、AAC、SBC）を登録
 - 非同期→同期ラッパーで A2DP 接続ライフサイクルを管理
-- SSP ペアリング（Just Works モード）を処理
-- WASAPI コールバック向けスレッドセーフなメディア送信を提供
-- Realtek チップセットファームウェアロード
+- SSP ペアリング（Just Works モード）を処理し、リンクキーを永続化
+- エンコードスレッドからのスレッドセーフなメディア送信を提供
+- AVRCP ボリュームと Realtek ファームウェアロード
 
 **使用する主な BTstack API**:
 - `a2dp_source_create_stream_endpoint()` -- コーデックエンドポイント登録
 - `a2dp_source_establish_stream()` -- A2DP シンクに接続
-- `a2dp_source_set_config_other()` -- ベンダー固有コーデック設定
+- `a2dp_source_set_config_other()` -- SSC ベンダー固有コーデック設定
 - `a2dp_source_stream_send_media_payload_rtp()` -- エンコード済み音声送信
 
 ### WASAPI Capture (`wasapi_capture.cpp`)
 
 Windows Audio Session API を使用してシステム音声出力をリアルタイムでキャプチャ。
 - `IAudioClient` を `AUDCLNT_STREAMFLAGS_LOOPBACK` モードで使用
-- PCM データ提供（float32 → int16 変換、チャネルダウンミックス）
-- オーディオデバイス選択に対応
+- float32 → int32/int16 変換、チャネルダウンミックス
+- `mute_output()` が既定のレンダーエンドポイントをミュート（ループバックはプレミックスなので、スピーカーのミュートはヘッドホンに影響しません）
+- デバイス選択に対応
 
 ### オーディオエンコーダー
 
-| エンコーダー | ライブラリ | ビットレート | 機能 |
+| エンコーダー | バックエンド | ビットレート | 備考 |
 |:-------------|:-----------|:-------------|:-----|
-| LDAC | libldac (AOSP) | 330/660/990 kbps | HQ/SQ/MQ モード、ABR |
-| aptX HD | libopenaptx | 576 kbps | 24-bit、固定レート |
-| aptX LL | libopenaptx | 352 kbps | 約 32 ms レイテンシー |
+| SSC | Samsung `libScalable_Encoder.so`（aarch64、デーモン経由） | 128/192/229 kbps (48k) / 250/442/584 kbps (96k UHQ) | 既定。モードで決まるビットレートセット |
 | AAC | fdk-aac | 最大 256 kbps | AAC-LC、LATM トランスポート |
 | SBC | BTstack Bluedroid | 最大約 345 kbps | A2DP 必須ベースライン |
 
@@ -167,25 +163,22 @@ Windows Audio Session API を使用してシステム音声出力をリアルタ
 
 | コーデック | Vendor ID | Codec ID |
 |:-----------|:----------|:---------|
-| LDAC | Sony (0x0000012D) | 0x00AA |
-| aptX HD | Qualcomm (0x000000D7) | 0x0024 |
-| aptX Low Latency | CSR (0x0000000A) | 0x0002 |
+| SSC | Samsung (0x00000075) | 0x0001 |
 
-AAC と SBC は A2DP 仕様で定義された標準コーデック ID を使用します。
+AAC と SBC は A2DP 仕様で定義された標準のコーデック ID を使用します。
 
 ## ビルドシステム
 
-- **CMake** + MSVC (Visual Studio 2022 以降)
-- サードパーティライブラリはソースから静的ライブラリとしてビルド
+- **CMake** + MSVC（Visual Studio 2022 以降）でコア / CLI をビルド
+- **MSBuild** で WinUI 3 プロジェクトをビルド（`winui3/A2DPWBWinUI.vcxproj`）
+- サードパーティライブラリはサブモジュールとしてソースから静的ライブラリとしてビルド
 - wxWidgets はビルド設定時に CMake FetchContent で取得 (v3.2.6)
 - 言語ファイル (JSON) はビルド設定時に実行ファイルに埋め込み
-- アプリケーションマニフェストとアイコンは Windows リソーススクリプトでコンパイル
 
 ## 重要な注意事項
 
-- **アダプター互換性**: Intel、CSR、Realtek USB アダプターでテスト済み。Realtek アダプターは起動時にファームウェアアップロードが必要
-- **ペアリング**: SSP Just Works を使用。リンクキーはローカルファイルに永続化
-- **セカンドアダプター推奨**: Windows には内蔵 Bluetooth、A2DPWB には専用 USB アダプターを使用
-- 一部の Bluetooth アダプターのファームウェアは達成可能なビットレートを制限する場合がある
-- USB Bluetooth 5.0 以上のアダプターは LDAC に適している
-- 自動コーデック選択の優先順位: LDAC > aptX HD > aptX LL > AAC > SBC
+- **アダプター互換性**: TP-Link UB500（Realtek RTL8761BU）でテスト済み。Realtek アダプターは起動時にファームウェアアップロードが必要
+- **ペアリング**: SSP Just Works を使用。リンクキーはローカルに永続化
+- **専用アダプター推奨**: Windows には内蔵 Bluetooth、ストリーミングには専用 USB アダプターを使用
+- **SSC UHQ** はリモートのケーパビリティビットでゲートされる（Buds3 FE: `0x3C`、UHQ なし）
+- コーデックフォールバック優先度: **SSC > AAC > SBC**

@@ -2,7 +2,7 @@
  * Audio Encoder Interface
  *
  * Abstract interface for Bluetooth audio codec encoders.
- * Implementations: LdacEncoder, AptxHdEncoder, AptxLlEncoder, SbcEncoder, AacEncoder
+ * Implementations: SbcEncoder, AacEncoder, SscEncoder
  *
  * SPDX-License-Identifier: MIT
  */
@@ -14,18 +14,16 @@
 
 /* Codec type identifier */
 enum class AudioCodec {
-    LDAC,
-    AptxHD,
-    AptxLL,
-    SBC,
+    SSC,
     AAC,
+    SBC,
 };
 
 /* Quality mode (codec-specific interpretation) */
 enum class EncoderQuality {
-    High = 0,      /* LDAC: 990kbps, SBC: bitpool 53, AAC: 256kbps */
-    Standard = 1,  /* LDAC: 660kbps, SBC: bitpool 35, AAC: 192kbps */
-    Mobile = 2     /* LDAC: 330kbps, SBC: bitpool 19, AAC: 128kbps */
+    High = 0,      /* SBC: bitpool 53, AAC: 256kbps, SSC: 229kbps */
+    Standard = 1,  /* SBC: bitpool 35, AAC: 192kbps, SSC: 192kbps */
+    Mobile = 2     /* SBC: bitpool 19, AAC: 128kbps, SSC: 128kbps */
 };
 
 class AudioEncoder {

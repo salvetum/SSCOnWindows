@@ -58,6 +58,10 @@ public:
      * device_id: empty for default render device. */
     static AudioDeviceFormat get_device_format(const std::wstring &device_id = L"");
 
+    /* Get the current peak audio level (0.0 - 1.0) of a render device via
+     * IAudioMeterInformation.  Returns -1 if unavailable. */
+    static float get_device_peak(const std::wstring &device_id);
+
 private:
     IMMDeviceEnumerator *enumerator_ = nullptr;
 

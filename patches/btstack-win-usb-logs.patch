@@ -1,0 +1,27 @@
+﻿diff --git a/platform/windows/hci_transport_h2_winusb.c b/platform/windows/hci_transport_h2_winusb.c
+index 1a0e2a7..69e9415 100644
+--- a/platform/windows/hci_transport_h2_winusb.c
++++ b/platform/windows/hci_transport_h2_winusb.c
+@@ -977,11 +977,11 @@ static int usb_try_open_device(const char * device_path){
+         FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED,
+         NULL);
+ 	log_info("Opening USB device: %p", usb_device_handle);
+-	if (!usb_device_handle) goto exit_on_error;
++	if (!usb_device_handle || usb_device_handle == INVALID_HANDLE_VALUE){ log_error("usb_try_open_device: CreateFile failed"); goto exit_on_error; }
+ 
+ 	// WinUsb_Initialize returns TRUE if the operation succeed
+ 	BOOL result = WinUsb_Initialize(usb_device_handle, &usb_interface_0_handle);
+-	if (!result) goto exit_on_error;
++	if (!result){ log_error("usb_try_open_device: WinUsb_Initialize failed"); goto exit_on_error; }
+ 
+     // Detect USB Dongle based Class, Subclass, and Protocol
+     // The class code (bDeviceClass) is 0xE0 ÔÇô Wireless Controller. 
+@@ -989,7 +989,7 @@ static int usb_try_open_device(const char * device_path){
+     // The Protocol code (bDeviceProtocol) is 0x01 ÔÇô Bluetooth programming.
+     USB_INTERFACE_DESCRIPTOR usb_interface_descriptor;
+     result = WinUsb_QueryInterfaceSettings(usb_interface_0_handle, 0, &usb_interface_descriptor);
+-    if (!result) goto exit_on_error;
++    if (!result){ log_error("usb_try_open_device: WinUsb_QueryInterfaceSettings failed"); goto exit_on_error; }
+ 
+     // ignore virtual Bluetooth adapter of VMware
+     if (usb_is_vmware_bluetooth_adapter(device_path)) {

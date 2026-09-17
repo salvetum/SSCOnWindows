@@ -29,15 +29,17 @@ void ProfileManager::load() {
             p.name           = item.value("name", "");
             p.device_address = item.value("device_address", "");
             p.device_name    = item.value("device_name", "");
-            p.codec          = item.value("codec", "auto");
+            p.codec          = item.value("codec", "ssc");
             p.quality        = item.value("quality", "hq");
-            p.abr            = item.value("abr", false);
+            p.bitrate_kbps   = item.value("bitrate_kbps", 0u);
             p.sample_rate    = item.value("sample_rate", 0u);
             p.bit_depth      = item.value("bit_depth", 0u);
             p.capture_mode     = item.value("capture_mode", std::string("loopback"));
             p.audio_device_id  = item.value("audio_device_id", std::string());
             p.audio_device_name = item.value("audio_device_name", std::string());
             p.auto_switch_device = item.value("auto_switch_device", true);
+            p.link_key         = item.value("link_key", std::string());
+            p.link_key_type    = item.value("link_key_type", 0);
             if (!p.name.empty() && !p.device_address.empty()) {
                 profiles_.push_back(std::move(p));
             }
@@ -56,13 +58,15 @@ void ProfileManager::save() const {
             {"device_name",    p.device_name},
             {"codec",          p.codec},
             {"quality",        p.quality},
-            {"abr",            p.abr},
+            {"bitrate_kbps",   p.bitrate_kbps},
             {"sample_rate",    p.sample_rate},
             {"bit_depth",      p.bit_depth},
             {"capture_mode",     p.capture_mode},
             {"audio_device_id",  p.audio_device_id},
             {"audio_device_name", p.audio_device_name},
-            {"auto_switch_device", p.auto_switch_device}
+            {"auto_switch_device", p.auto_switch_device},
+            {"link_key",         p.link_key},
+            {"link_key_type",    p.link_key_type}
         });
     }
 
@@ -108,23 +112,16 @@ int ProfileManager::find_by_name(const std::string &name) const {
 }
 
 int ProfileManager::codec_to_index(const std::string &codec) {
-    if (codec == "auto")   return 0;
-    if (codec == "ldac")   return 1;
-    if (codec == "aptxhd") return 2;
-    if (codec == "aptxll") return 3;
-    if (codec == "sbc")    return 4;
-    if (codec == "aac")    return 5;
-    return 0;
+    if (codec == "aac") return 1;
+    if (codec == "sbc") return 2;
+    return 0; /* ssc default; legacy values (auto/ldac/...) fall back to SSC */
 }
 
 std::string ProfileManager::index_to_codec(int index) {
     switch (index) {
-    case 1: return "ldac";
-    case 2: return "aptxhd";
-    case 3: return "aptxll";
-    case 4: return "sbc";
-    case 5: return "aac";
-    default: return "auto";
+    case 1: return "aac";
+    case 2: return "sbc";
+    default: return "ssc";
     }
 }
 
@@ -146,6 +143,7 @@ std::string ProfileManager::index_to_quality(int index) {
 int ProfileManager::bit_depth_to_index(uint32_t bit_depth) {
     if (bit_depth == 16) return 1;
     if (bit_depth == 24) return 2;
+    if (bit_depth == 32) return 3;
     return 0; /* auto */
 }
 
@@ -153,6 +151,7 @@ uint32_t ProfileManager::index_to_bit_depth(int index) {
     switch (index) {
     case 1: return 16;
     case 2: return 24;
+    case 3: return 32;
     default: return 0; /* auto */
     }
 }

@@ -2,9 +2,7 @@
  * A2DP Windows Bridge (A2DPWB): Bluetooth Audio Streaming Application
  *
  * Supports multiple Bluetooth audio codecs:
- *   - LDAC (Sony, up to 990 kbps)
- *   - aptX HD (Qualcomm, 576 kbps, 24-bit)
- *   - aptX Low Latency (Qualcomm/CSR, 352 kbps, ~32ms latency)
+ *   - SSC (Samsung Scalable Codec)
  *   - AAC (MPEG-2/4 AAC-LC, up to 256 kbps)
  *   - SBC (mandatory A2DP codec, up to ~345 kbps)
  *
@@ -20,6 +18,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <cmath>
 #include <atomic>
 #include <memory>
 #include <mutex>
@@ -30,14 +29,14 @@
 #include "audio_device_enum.h"
 #include "capture_mode.h"
 #include "wasapi_capture.h"
-#include "ldac_encoder.h"
-#include "aptxhd_encoder.h"
 #include "a2dp_sbc_encoder.h"
 #include "aac_encoder.h"
-#include "aptxll_encoder.h"
+#include "ssc_encoder.h"
 #include "bt_device.h"
 #include "btstack_transport.h"
+#include "bt_adapter_enum.h"
 #include "config_path.h"
+#include "resampler.h"
 #include "wx_app.h"
 
 /* Global state */
@@ -55,11 +54,14 @@ static std::vector<uint8_t> g_pcm_residual;
 
 /* Streaming components */
 static std::atomic<AudioEncoder *> g_encoder{nullptr};
-static AudioCodec g_active_codec = AudioCodec::LDAC;
+static AudioCodec g_active_codec = AudioCodec::SSC;
 static uint32_t g_timestamp = 0;
 static uint32_t g_active_channels = 2;
-static bool g_abr_enabled = false;
-static uint32_t g_encoder_sample_bytes = 2; /* 2 for int16, 4 for int32 (24/32-bit) */
+static uint32_t g_encoder_sample_bytes = 2; /* 2 for int16, 4 for int32 */
+static double g_pcm_int32_scale = 2147483647.0; /* int32 scale (SSC daemon expects 2^29) */
+static uint32_t g_encode_sample_rate = 0; /* 0 = same as capture; 96000 = SSC UHQ */
+static bool g_ssc_native_daemon = false; /* --ssc-native: Windows Qiling daemon */
+static uint32_t g_ssc_bitrate_kbps = 0;  /* --bitrate: explicit SSC kbps (0 = auto) */
 
 /* BTstack transport */
 static std::atomic<BtStackTransport *> g_transport{nullptr};
@@ -81,18 +83,99 @@ static void convert_float32_to_int32(const float *src, int32_t *dst, uint32_t sa
         float s = src[i];
         if (s > 1.0f) s = 1.0f;
         if (s < -1.0f) s = -1.0f;
-        dst[i] = static_cast<int32_t>(static_cast<double>(s) * 2147483647.0);
+        dst[i] = static_cast<int32_t>(static_cast<double>(s) * g_pcm_int32_scale);
     }
 }
 
+/* Status encoder counters for STATS line */
+static uint64_t g_enc_bytes_total = 0;
+static uint64_t g_enc_us_total = 0;
+static uint32_t g_enc_calls = 0;
+
 /* Audio callback: receives PCM data, encodes, sends via transport */
+static uint64_t g_cb_samples_total = 0;
+static uint64_t g_cb_bytes_total = 0;
+static uint64_t g_cb_rms_total = 0;
+static uint64_t g_last_cb_log = 0;
+
+static float compute_rms_sum(const float *s, uint32_t n) {
+    float sum = 0.0f;
+    for (uint32_t i = 0; i < n; i++) sum += s[i] * s[i];
+    return sum;
+}
+
+static float compute_rms_sum_i16(const int16_t *s, uint32_t n) {
+    float sum = 0.0f;
+    for (uint32_t i = 0; i < n; i++) {
+        float v = static_cast<float>(s[i]) / 32768.0f;
+        sum += v * v;
+    }
+    return sum;
+}
+
 static void audio_callback(
     const uint8_t *data, uint32_t frames,
     uint32_t channels, uint32_t sample_rate, uint32_t bits_per_sample)
 {
     (void)sample_rate;
 
+    /* Health metric: report capture level every 2s */
+    {
+        uint64_t now_ms = GetTickCount64();
+        g_cb_samples_total += frames;
+        g_cb_bytes_total += (uint64_t)frames * channels * (bits_per_sample / 8);
+        if (bits_per_sample == 32)
+            g_cb_rms_total += (uint64_t)(compute_rms_sum(reinterpret_cast<const float *>(data), frames * channels) * 65536.0);
+        else if (bits_per_sample == 16)
+            g_cb_rms_total += (uint64_t)(compute_rms_sum_i16(reinterpret_cast<const int16_t *>(data), frames * channels) * 65536.0);
+        if (now_ms - g_last_cb_log >= 2000) {
+            g_last_cb_log = now_ms;
+            double rms_avg = g_cb_samples_total
+                ? (static_cast<double>(g_cb_rms_total) / 65536.0) / g_cb_samples_total
+                : 0.0;
+            double db = (rms_avg > 0.0) ? (10.0 * log10(rms_avg)) : -200.0;
+            /* Compute arrival rate (frames/sec) since last sample */
+            static uint64_t last_frames = 0;
+            static uint64_t last_tick = 0;
+            double rate = 0.0;
+            if (last_tick != 0) {
+                double dt = (now_ms - last_tick) / 1000.0;
+                if (dt > 0)
+                    rate = (g_cb_samples_total - last_frames) / dt;
+            }
+            last_frames = g_cb_samples_total;
+            last_tick = now_ms;
+            uint32_t qd = 0, sf = 0;
+            BtStackTransport *t = g_transport.load();
+            if (t) { qd = t->get_queue_depth(); sf = t->get_and_reset_send_failure_count(); }
+            fprintf(stderr, "CAP: frames=%llu rate=%.0ffs bytes=%llu rms_avg=%.6f db=%.1f queue=%u fail=%u\n",
+                (unsigned long long)g_cb_samples_total, rate,
+                (unsigned long long)g_cb_bytes_total, rms_avg, db, qd, sf);
+            /* Per-window STATS: effective bitrate + average encode latency */
+            {
+                static uint64_t s_last_bytes = 0, s_last_us = 0;
+                static uint32_t s_last_calls = 0;
+                double dt_stats = 2.0; /* window is 2000 ms */
+                double kbps = (g_enc_bytes_total >= s_last_bytes)
+                    ? (double)(g_enc_bytes_total - s_last_bytes) * 8.0 / 1000.0 / dt_stats : 0.0;
+                double enc_avg_ms = (g_enc_calls > s_last_calls)
+                    ? (double)(g_enc_us_total - s_last_us) / 1000.0 / (double)(g_enc_calls - s_last_calls)
+                    : 0.0;
+                s_last_bytes = g_enc_bytes_total;
+                s_last_us = g_enc_us_total;
+                s_last_calls = g_enc_calls;
+                fprintf(stderr, "STATS: bitrate=%.0fkbps enc_avg=%.2fms enc_calls=%u enc_bytes=%llu\n",
+                        kbps, enc_avg_ms, g_enc_calls, (unsigned long long)g_enc_bytes_total);
+            }
+            fflush(stderr);
+        }
+    }
+
     if (!g_running.load()) return;
+
+    LARGE_INTEGER cb_start, cb_end, cb_freq;
+    QueryPerformanceCounter(&cb_start);
+    QueryPerformanceFrequency(&cb_freq);
 
     std::lock_guard<std::mutex> lock(g_encode_mutex);
 
@@ -139,6 +222,19 @@ static void audio_callback(
                 for (uint32_t c = 0; c < use_channels; c++)
                     float_stereo[f * use_channels + c] = float_src[f * channels + c];
             float_src = float_stereo.data();
+        }
+
+        /* %% SSC UHQ: 2x upsampling (48 kHz WASAPI capture → 96 kHz encode).
+         * Applied on downmixed interleaved float32 (stereo) before the
+         * integer conversion and encoding. */
+        static std::vector<float> src_float;
+        if (g_encode_sample_rate == 96000 && out_channels == 2) {
+            uint32_t src_cap = frames * 8; /* 2x frames × 2ch × 4B */
+            if (src_float.size() < src_cap) src_float.resize(src_cap);
+            uint32_t out_frames = upsample_2x_stereo_f32(float_src, frames,
+                                                        src_float.data(), frames * 2);
+            frames = out_frames;
+            float_src = src_float.data();
         }
 
         uint32_t out_samples = frames * out_channels;
@@ -254,9 +350,8 @@ static void audio_callback(
 
     uint16_t mtu = transport->get_media_mtu();
     if (mtu == 0) mtu = 679;
-    /* Reserve 1 byte for LDAC/SBC media payload header (added by send_media) */
-    uint32_t max_raw = (g_active_codec == AudioCodec::LDAC ||
-                        g_active_codec == AudioCodec::SBC) ? (mtu - 1) : mtu;
+    /* Reserve 1 byte for the SBC media payload header (added by send_media) */
+    uint32_t max_raw = (g_active_codec == AudioCodec::SBC) ? (mtu - 1) : mtu;
 
     static thread_local uint8_t accum[2048];
     uint32_t accum_size = 0;
@@ -267,12 +362,19 @@ static void audio_callback(
         uint32_t out_size = static_cast<uint32_t>(g_encode_buffer.size());
         uint32_t out_frames = 0;
 
+        LARGE_INTEGER e0, e1;
+        QueryPerformanceCounter(&e0);
         bool ok = encoder->encode(
             pcm_data + offset, bytes_per_encode,
             g_encode_buffer.data(), &out_size, &out_frames
         );
-
+        QueryPerformanceCounter(&e1);
         if (ok && out_size > 0) {
+            g_enc_calls++;
+            g_enc_bytes_total += out_size;
+            g_enc_us_total +=
+                (uint64_t)((e1.QuadPart - e0.QuadPart) * 1000000.0 / (double)cb_freq.QuadPart);
+
             /* Flush if adding this frame would exceed MTU */
             if (accum_size + out_size > max_raw && accum_frames > 0) {
                 transport->send_media(
@@ -310,22 +412,19 @@ static void audio_callback(
         g_pcm_residual.clear();
     }
 
-    /* ABR: periodically adjust LDAC quality based on queue depth.
-     * Rate-limited to 100ms to match ldac_ABR_Init() interval. */
-    if (g_abr_enabled && encoder->codec_type() == AudioCodec::LDAC) {
-        LdacEncoder *ldac = static_cast<LdacEncoder *>(encoder);
-        if (ldac->is_abr_enabled()) {
-            static uint32_t abr_last_tick = 0;
-            uint32_t now = GetTickCount();
-            if (now - abr_last_tick >= 100) {
-                abr_last_tick = now;
-                uint32_t queue_depth = 0;
-                BtStackTransport *abr_transport = g_transport.load();
-                if (abr_transport) queue_depth = abr_transport->get_queue_depth();
-                ldac->abr_adjust(queue_depth);
-            }
-        }
+    QueryPerformanceCounter(&cb_end);
+    double cb_ms = (double)(cb_end.QuadPart - cb_start.QuadPart) * 1000.0 / (double)cb_freq.QuadPart;
+    static double max_cb_ms = 0;
+    static DWORD last_cb_diag = 0;
+    DWORD cb_now = GetTickCount();
+    if (cb_ms > max_cb_ms) max_cb_ms = cb_ms;
+    if (cb_now - last_cb_diag >= 2000) {
+        last_cb_diag = cb_now;
+        fprintf(stderr, "CB: last-call=%.2fms max=%.2fms frames=%u\n",
+                cb_ms, max_cb_ms, frames);
+        max_cb_ms = 0;
     }
+
 }
 
 /* Console Ctrl+C handler */
@@ -339,24 +438,28 @@ static BOOL WINAPI console_handler(DWORD ctrl_type) {
 }
 
 static void print_usage(const char *prog) {
-    printf("A2DP Windows Bridge (A2DPWB)\n\n");
+    printf("SSC On Windows v%s (by Salvetum)\n\n", APP_VERSION);
     printf("Usage: %s [options]\n", prog);
     printf("\nModes:\n");
     printf("  (default)    Launch GUI application\n");
     printf("  --cli        Run in command-line mode\n");
     printf("\nOptions (CLI mode):\n");
-    printf("  -c <codec>   Codec: ldac, aptxhd, aptxll, sbc, aac, auto (default: auto)\n");
-    printf("  -q <mode>    Quality mode: hq (990kbps), sq (660kbps), mq (330kbps)\n");
-    printf("               Only affects LDAC. Default: hq\n");
+    printf("  -c <codec>   Codec: ssc, aac, sbc (default: ssc)\n");
+    printf("  -q <mode>    Quality mode: hq, sq, mq (default: hq)\n");
     printf("  -d <addr>    Bluetooth device address (XX:XX:XX:XX:XX:XX)\n");
     printf("               If not specified, scans for compatible devices\n");
-    printf("  -a           Enable LDAC ABR (Adaptive Bit Rate)\n");
     printf("  -m <mode>    Capture mode: loopback, virtual (default: loopback)\n");
     printf("  --audio-device <id>  Audio device ID for virtual mode\n");
+    printf("  --no-mute-output      Do NOT mute the default speaker while streaming\n");
+    printf("  --bit-depth <bits>    PCM bit depth (accepted for compatibility; fixed per codec)\n");
+    printf("  --uhq                 SSC UHQ mode: encode at 96 kHz (2x SRC from 48 kHz)\n");
+    printf("  --ssc-native          Use the Windows-native Qiling SSC daemon instead of WSL2\n");
+    printf("  --bitrate <kbps>      SSC bitrate override (0=auto; snapped to a supported value)\n");
+    printf("                        (spawns tools\\ssc_daemon\\sscblobd.py; env SSC_DAEMON_PY override)\n");
     printf("  -l           List available Bluetooth audio devices and exit\n");
     printf("  -u <path>    USB device path for BTstack (optional)\n");
     printf("  -h           Show this help\n");
-    printf("\nCodec priority (auto mode): LDAC > aptX HD > aptX LL > AAC > SBC\n");
+    printf("\nCodec fallback priority: SSC > AAC > SBC\n");
 }
 
 static EncoderQuality parse_quality(const char *mode) {
@@ -369,11 +472,9 @@ static EncoderQuality parse_quality(const char *mode) {
 
 static const char *codec_name_str(AudioCodec codec) {
     switch (codec) {
-    case AudioCodec::LDAC:   return "LDAC";
-    case AudioCodec::AptxHD: return "aptX HD";
-    case AudioCodec::AptxLL: return "aptX Low Latency";
-    case AudioCodec::SBC:    return "SBC";
-    case AudioCodec::AAC:    return "AAC";
+    case AudioCodec::SBC: return "SBC";
+    case AudioCodec::AAC: return "AAC";
+    case AudioCodec::SSC: return "SSC";
     }
     return "Unknown";
 }
@@ -384,26 +485,19 @@ static const char *codec_name_str(AudioCodec codec) {
  */
 static bool find_best_btstack_codec(const BtStackTransport::RemoteCodecCaps &caps,
                                      AudioCodec requested_codec,
-                                     bool auto_mode,
                                      AudioCodec *selected_codec) {
-    if (!auto_mode) {
-        switch (requested_codec) {
-        case AudioCodec::LDAC:   if (caps.ldac)    { *selected_codec = AudioCodec::LDAC;   return true; } break;
-        case AudioCodec::AptxHD: if (caps.aptx_hd) { *selected_codec = AudioCodec::AptxHD; return true; } break;
-        case AudioCodec::AptxLL: if (caps.aptx_ll) { *selected_codec = AudioCodec::AptxLL; return true; } break;
-        case AudioCodec::SBC:    if (caps.sbc)     { *selected_codec = AudioCodec::SBC;    return true; } break;
-        case AudioCodec::AAC:    if (caps.aac)     { *selected_codec = AudioCodec::AAC;    return true; } break;
-        }
-        printf("Requested codec %s not available, falling back...\n",
-               codec_name_str(requested_codec));
+    switch (requested_codec) {
+    case AudioCodec::SBC: if (caps.sbc) { *selected_codec = AudioCodec::SBC; return true; } break;
+    case AudioCodec::AAC: if (caps.aac) { *selected_codec = AudioCodec::AAC; return true; } break;
+    case AudioCodec::SSC: if (caps.ssc) { *selected_codec = AudioCodec::SSC; return true; } break;
     }
+    printf("Requested codec %s not available, falling back...\n",
+           codec_name_str(requested_codec));
 
-    /* Priority: LDAC > aptX HD > aptX LL > AAC > SBC */
-    if (caps.ldac)    { *selected_codec = AudioCodec::LDAC;   return true; }
-    if (caps.aptx_hd) { *selected_codec = AudioCodec::AptxHD; return true; }
-    if (caps.aptx_ll) { *selected_codec = AudioCodec::AptxLL; return true; }
-    if (caps.aac)     { *selected_codec = AudioCodec::AAC;    return true; }
-    if (caps.sbc)     { *selected_codec = AudioCodec::SBC;    return true; }
+    /* Priority: SSC > AAC > SBC */
+    if (caps.ssc) { *selected_codec = AudioCodec::SSC; return true; }
+    if (caps.aac) { *selected_codec = AudioCodec::AAC; return true; }
+    if (caps.sbc) { *selected_codec = AudioCodec::SBC; return true; }
 
     return false;
 }
@@ -414,12 +508,28 @@ static bool find_best_btstack_codec(const BtStackTransport::RemoteCodecCaps &cap
 
 static int run_streaming(const uint8_t target_addr[6],
                              const char *usb_path,
-                             AudioCodec requested_codec, bool auto_codec,
-                             EncoderQuality quality, bool enable_abr,
+                             AudioCodec requested_codec,
+                             EncoderQuality quality,
                              CaptureMode capture_mode = CaptureMode::SystemLoopback,
-                             const wchar_t *audio_device_id = nullptr) {
+                             const wchar_t *audio_device_id = nullptr,
+                             bool mute_output = true,
+                             bool uhq = false) {
     BtStackTransport transport;
     transport.set_link_key_dir(get_config_dir());
+    transport.set_firmware_dir(get_config_dir());
+    transport.set_hci_dump_enabled(true);
+
+    /* Detect embedded Realtek chip from the connected USB adapter so
+     * BTstack can load the correct firmware (Windows no longer loads it
+     * once the adapter is switched to the WinUSB driver). */
+    auto adapters = BtAdapterEnumerator::enumerate();
+    for (const auto &a : adapters) {
+        if (a.realtek_pid != 0) {
+            fprintf(stderr, "BTstack: detected Realtek chip PID=0x%04X\n", a.realtek_pid);
+            transport.set_product_id(a.realtek_pid);
+            break;
+        }
+    }
 
     /* --- Step 2: Initialize BTstack --- */
     printf("\n[2/5] Initializing BTstack (WinUSB transport)...\n");
@@ -453,9 +563,9 @@ static int run_streaming(const uint8_t target_addr[6],
     /* Select codec */
     AudioCodec selected_codec;
     if (!find_best_btstack_codec(transport.get_remote_caps(),
-                                  requested_codec, auto_codec, &selected_codec)) {
+                                  requested_codec, &selected_codec)) {
         fprintf(stderr, "No compatible codec found on device.\n"
-                "Device must support LDAC, aptX HD, or aptX Low Latency.\n");
+                "Device must support SSC, AAC, or SBC.\n");
         transport.disconnect();
         transport.shutdown();
         return 1;
@@ -507,33 +617,30 @@ static int run_streaming(const uint8_t target_addr[6],
     uint32_t sample_rate = wasapi_capture.get_sample_rate();
     uint32_t channels = wasapi_capture.get_channels();
 
-    /* Warn if system sample rate is above 48kHz — LDAC frame size is fixed at
-     * 128 samples, so higher rates halve the bits per frame and degrade quality.
-     * 96kHz at 990kbps ≈ 495kbps effective at 48kHz (below SQ mode). */
-    if (sample_rate > 48000) {
-        printf("\n*** WARNING: System sample rate is %u Hz. ***\n"
-               "*** LDAC quality degrades at high sample rates because the    ***\n"
-               "*** per-frame bitrate is halved (990kbps@96kHz ≈ 495kbps@48kHz). ***\n"
-               "*** For best quality, set Windows audio output to 48000 Hz.  ***\n\n",
-               sample_rate);
+    /* Determine encode sample rate: for SSC UHQ, encode at 96 kHz even if
+     * WASAPI only captures at 48 kHz.  The audio callback applies 2x SRC. */
+    uint32_t encode_sr = sample_rate;
+    if (selected_codec == AudioCodec::SSC && sample_rate == 48000 && uhq) {
+        const auto &rc = transport.get_remote_caps();
+        if (rc.ssc_uhq) {
+            encode_sr = 96000;
+            fprintf(stderr, "\n*** SSC UHQ: encode at 96 kHz (WASAPI capture 48 kHz, 2x SRC) ***\n");
+        } else {
+            fprintf(stderr,
+                    "\n*** SSC UHQ unavailable: remote SSC cap=0x%02X has no UHQ(0x02) bit. ***\n"
+                    "*** Falling back to 48 kHz SSC — device does not decode 96 kHz. ***\n",
+                    rc.ssc_cap);
+        }
     }
+    g_encode_sample_rate = encode_sr;
 
     if (channels > 2) {
         printf("System output has %u channels, downmixing to stereo\n", channels);
     }
     g_active_channels = (channels > 2) ? 2 : channels;
 
-    if ((selected_codec == AudioCodec::AptxHD || selected_codec == AudioCodec::AptxLL)
-        && g_active_channels < 2) {
-        fprintf(stderr, "%s requires stereo output. Current system output is mono.\n",
-                codec_name_str(selected_codec));
-        transport.disconnect();
-        transport.shutdown();
-        return 1;
-    }
-
-    /* Configure stream */
-    if (!transport.configure_codec(selected_codec, sample_rate,
+    /* Configure stream — use encode_sr for the remote side */
+    if (!transport.configure_codec(selected_codec, encode_sr,
                                     static_cast<uint8_t>(g_active_channels))) {
         fprintf(stderr, "Failed to configure %s stream\n", codec_name_str(selected_codec));
         transport.disconnect();
@@ -547,14 +654,6 @@ static int run_streaming(const uint8_t target_addr[6],
     if (media_mtu == 0) media_mtu = 679;
 
     switch (selected_codec) {
-    case AudioCodec::LDAC: {
-        auto ldac = std::make_unique<LdacEncoder>();
-        ldac->set_bit_depth(32);
-        encoder = std::move(ldac);
-        break;
-    }
-    case AudioCodec::AptxHD: encoder = std::make_unique<AptxHdEncoder>(); break;
-    case AudioCodec::AptxLL: encoder = std::make_unique<AptxLlEncoder>(); break;
     case AudioCodec::SBC:    encoder = std::make_unique<SbcEncoder>(); break;
 #ifdef AAC_ENCODER_AVAILABLE
     case AudioCodec::AAC:    encoder = std::make_unique<AacEncoder>(); break;
@@ -565,24 +664,25 @@ static int run_streaming(const uint8_t target_addr[6],
         transport.shutdown();
         return 1;
 #endif
+    case AudioCodec::SSC: {
+        auto ssc = std::make_unique<SscEncoder>();
+        if (g_ssc_native_daemon) ssc->set_native_daemon(true);
+        if (g_ssc_bitrate_kbps > 0) ssc->set_bitrate_override(g_ssc_bitrate_kbps);
+        encoder = std::move(ssc);
+        break;
+    }
     }
 
-    if (!encoder->init(media_mtu, quality, sample_rate, g_active_channels)) {
+    if (!encoder->init(media_mtu, quality, encode_sr, g_active_channels)) {
         fprintf(stderr, "Failed to initialize %s encoder\n", codec_name_str(selected_codec));
         transport.disconnect();
         transport.shutdown();
         return 1;
     }
 
-    /* Set sample width for audio callback based on encoder bit depth */
-    g_encoder_sample_bytes = (selected_codec == AudioCodec::LDAC) ? 4 : 2;
-
-    if (enable_abr && selected_codec == AudioCodec::LDAC) {
-        LdacEncoder *ldac = static_cast<LdacEncoder *>(encoder.get());
-        if (ldac->init_abr(100)) {
-            g_abr_enabled = true;
-        }
-    }
+    /* Set sample width for audio callback: SSC is int32 fixed, SBC/AAC int16. */
+    g_encoder_sample_bytes = (selected_codec == AudioCodec::SSC) ? 4 : 2;
+    g_pcm_int32_scale = (selected_codec == AudioCodec::SSC) ? 536870912.0 : 2147483647.0;
 
     /* Start streaming */
     if (!transport.start_stream()) {
@@ -594,15 +694,36 @@ static int run_streaming(const uint8_t target_addr[6],
 
     /* --- Step 5: Stream --- */
     printf("\n[5/5] Streaming %s audio (BTstack/WinUSB)...\n", codec_name_str(selected_codec));
-    printf("Codec: %s | Bitrate: %u kbps | Sample rate: %u Hz | Channels: %u%s\n",
+    printf("Codec: %s | Bitrate: %u kbps | Sample rate: %u Hz | Channels: %u\n",
            encoder->codec_name(), encoder->get_bitrate_kbps(),
-           sample_rate, g_active_channels,
-           g_abr_enabled ? " | ABR: on" : "");
+           sample_rate, g_active_channels);
     printf("Press Ctrl+C to stop.\n\n");
 
     g_encoder.store(encoder.get());
     g_transport.store(&transport);
     g_timestamp = 0;
+
+    /* Audio device survey: find which endpoint actually has signal */
+    {
+        AudioDeviceEnumerator dev_enum;
+        if (dev_enum.init()) {
+            auto devices = dev_enum.enumerate();
+            std::wstring default_id = AudioDeviceEnumerator::get_default_device_id();
+            fprintf(stderr, "--- Audio device survey ---\n");
+            for (const auto &d : devices) {
+                float peak = AudioDeviceEnumerator::get_device_peak(d.id);
+                fprintf(stderr, "Device[%s] '%s' default=%d virtual=%d peak=%.3f dB=%.1f\n",
+                        d.id.size() > 40 ? L"..." : d.id.c_str(),
+                        d.display_name.c_str(), d.is_default ? 1 : 0,
+                        d.is_virtual ? 1 : 0,
+                        peak, 20.0 * log10(peak + 1e-12));
+                if (!d.is_default && d.display_name == L"") { (void)default_id; }
+            }
+            if (devices.empty()) {
+                fprintf(stderr, "Audio device survey: no render devices found!\n");
+            }
+        }
+    }
 
     bool cli_capture_started = wasapi_capture.start(audio_callback);
     if (!cli_capture_started) {
@@ -612,6 +733,14 @@ static int run_streaming(const uint8_t target_addr[6],
         transport.disconnect();
         transport.shutdown();
         return 1;
+    }
+
+    /* Auto-mute the default output so the speakers stay silent while the
+     * loopback copy plays through the headphones. Loopback capture reads
+     * pre-volume-mix, so muting does not affect the headphones. */
+    bool cli_output_muted = false;
+    if (mute_output && capture_mode == CaptureMode::SystemLoopback) {
+        cli_output_muted = wasapi_capture.mute_output(true);
     }
 
     /* Main loop: keep streaming, auto-reconnect on disconnect */
@@ -660,13 +789,17 @@ static int run_streaming(const uint8_t target_addr[6],
             g_pcm_residual.clear();
             g_encoder.store(encoder.get());
             g_transport.store(&transport);
-            printf("*** Reconnected — resuming LDAC streaming ***\n\n");
+            printf("*** Reconnected — resuming streaming ***\n\n");
         }
     }
 
     /* Cleanup */
     printf("\nShutting down...\n");
     wasapi_capture.stop();
+    if (cli_output_muted) {
+        wasapi_capture.mute_output(false);
+        cli_output_muted = false;
+    }
     g_encoder.store(nullptr);
     g_transport.store(nullptr);
 
@@ -689,6 +822,9 @@ static int run_streaming(const uint8_t target_addr[6],
 /* ======================================================================== */
 
 int main(int argc, char *argv[]) {
+    /* Flush stdout immediately so CLI logs are visible when redirected/pipe */
+    setvbuf(stdout, nullptr, _IONBF, 0);
+
     /* Check for GUI mode (default) vs CLI mode */
     bool cli_mode = false;
     bool start_minimized = false;
@@ -713,10 +849,12 @@ int main(int argc, char *argv[]) {
     /* Single instance check (GUI mode only) */
     HANDLE single_instance_mutex = nullptr;
     if (!cli_mode) {
-        single_instance_mutex = CreateMutexW(nullptr, TRUE, L"A2DPWB_SingleInstance");
+        single_instance_mutex = CreateMutexW(nullptr, TRUE, L"SSCOnWindows_SingleInstance");
         if (GetLastError() == ERROR_ALREADY_EXISTS) {
             /* Another instance is already running. Try to bring its window to front. */
-            HWND existing = FindWindowW(nullptr, L"A2DPWB");
+            wchar_t win_title[64];
+            swprintf(win_title, 64, L"SSC On Windows v%hs", APP_VERSION);
+            HWND existing = FindWindowW(nullptr, win_title);
             if (existing) {
                 if (!IsWindowVisible(existing))
                     ShowWindow(existing, SW_SHOW);
@@ -741,46 +879,34 @@ int main(int argc, char *argv[]) {
     }
 
     /* CLI mode */
-    printf("A2DP Windows Bridge (A2DPWB)\n");
-    printf("Codecs: LDAC | aptX HD | aptX Low Latency | AAC | SBC\n");
+    printf("SSC On Windows v%s (by Salvetum)\n", APP_VERSION);
+    printf("Codecs: SSC | AAC | SBC\n");
     printf("===================================================\n\n");
 
     /* Parse command-line arguments */
     EncoderQuality quality = EncoderQuality::High;
-    AudioCodec requested_codec = AudioCodec::LDAC;
-    bool auto_codec = true;
-    bool enable_abr = false;
+    AudioCodec requested_codec = AudioCodec::SSC;
     char device_addr_str[32] = {};
     bool list_only = false;
     const char *usb_path = nullptr;
     CaptureMode cli_capture_mode = CaptureMode::SystemLoopback;
     const char *cli_audio_device = nullptr;
+    bool cli_mute_output = true;
+    bool cli_uhq = false;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--cli") == 0) {
             continue;  /* Already handled */
         } else if (strcmp(argv[i], "-c") == 0 && i + 1 < argc) {
             i++;
-            if (_stricmp(argv[i], "ldac") == 0) {
-                requested_codec = AudioCodec::LDAC;
-                auto_codec = false;
-            } else if (_stricmp(argv[i], "aptxhd") == 0) {
-                requested_codec = AudioCodec::AptxHD;
-                auto_codec = false;
-            } else if (_stricmp(argv[i], "aptxll") == 0) {
-                requested_codec = AudioCodec::AptxLL;
-                auto_codec = false;
-            } else if (_stricmp(argv[i], "sbc") == 0) {
+            if (_stricmp(argv[i], "sbc") == 0) {
                 requested_codec = AudioCodec::SBC;
-                auto_codec = false;
             } else if (_stricmp(argv[i], "aac") == 0) {
                 requested_codec = AudioCodec::AAC;
-                auto_codec = false;
-            } else if (_stricmp(argv[i], "auto") == 0) {
-                auto_codec = true;
+            } else if (_stricmp(argv[i], "ssc") == 0 || _stricmp(argv[i], "auto") == 0) {
+                requested_codec = AudioCodec::SSC;
             } else {
-                fprintf(stderr, "Unknown codec '%s'. Use: ldac, aptxhd, aptxll, sbc, aac, auto\n",
-                        argv[i]);
+                fprintf(stderr, "Unknown codec '%s'. Use: ssc, aac, sbc\n", argv[i]);
                 return 1;
             }
         } else if (strcmp(argv[i], "-q") == 0 && i + 1 < argc) {
@@ -788,7 +914,7 @@ int main(int argc, char *argv[]) {
         } else if (strcmp(argv[i], "-d") == 0 && i + 1 < argc) {
             strncpy(device_addr_str, argv[++i], sizeof(device_addr_str) - 1);
         } else if (strcmp(argv[i], "-a") == 0) {
-            enable_abr = true;
+            /* Deprecated: LDAC ABR removed. Ignored for compatibility. */
         } else if (strcmp(argv[i], "-l") == 0) {
             list_only = true;
         } else if (strcmp(argv[i], "-u") == 0 && i + 1 < argc) {
@@ -806,6 +932,16 @@ int main(int argc, char *argv[]) {
             }
         } else if (strcmp(argv[i], "--audio-device") == 0 && i + 1 < argc) {
             cli_audio_device = argv[++i];
+        } else if (strcmp(argv[i], "--no-mute-output") == 0) {
+            cli_mute_output = false;
+        } else if (strcmp(argv[i], "--bit-depth") == 0 && i + 1 < argc) {
+            ++i; /* accepted for compatibility; bit depth is fixed per codec */
+        } else if (strcmp(argv[i], "--uhq") == 0) {
+            cli_uhq = true;
+        } else if (strcmp(argv[i], "--ssc-native") == 0) {
+            g_ssc_native_daemon = true;
+        } else if (strcmp(argv[i], "--bitrate") == 0 && i + 1 < argc) {
+            g_ssc_bitrate_kbps = static_cast<uint32_t>(atoi(argv[++i]));
         } else if (strcmp(argv[i], "-h") == 0) {
             print_usage(argv[0]);
             return 0;
@@ -878,9 +1014,10 @@ int main(int argc, char *argv[]) {
     }
 
     int result = run_streaming(target_addr, usb_path,
-                               requested_codec, auto_codec, quality, enable_abr,
+                               requested_codec, quality,
                                cli_capture_mode,
-                               cli_audio_device_w.empty() ? nullptr : cli_audio_device_w.c_str());
+                               cli_audio_device_w.empty() ? nullptr : cli_audio_device_w.c_str(),
+                               cli_mute_output, cli_uhq);
 
     CoUninitialize();
     return result;

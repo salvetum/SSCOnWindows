@@ -1,0 +1,11 @@
+#!/bin/sh
+# sscenc-blob-run - runs the Samsung libScalable_Encoder.so ARM64 blob under
+# qemu-aarch64 with Android libc shims. argv[1..4] = rate channels bits bitrate
+if [ -z "${SSCENC_BLOB_SO:-}" ]; then
+  echo "SSCENC_BLOB_SO is not set" >&2
+  exit 127
+fi
+BLOB_HELPER=~/ssc/openssc/build_blob/ssc_blob_helper
+SHIMDIR=~/ssc/openssc/build_blob
+SYSROOT=/usr/aarch64-linux-gnu
+exec qemu-aarch64 -L "$SYSROOT" -E LD_LIBRARY_PATH="${SHIMDIR}" "${BLOB_HELPER}" "${SSCENC_BLOB_SO}" "$@"

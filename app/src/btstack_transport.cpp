@@ -39,12 +39,10 @@ extern "C" {
  * Vendor codec IDs (duplicated from avdtp.h to avoid enum conflicts
  * with BTstack's avdtp.h which defines the same AVDTP enumerator names)
  */
-#define LDAC_VENDOR_ID      0x0000012Du  /* Sony Corporation */
-#define LDAC_CODEC_ID       0x00AAu      /* LDAC */
-#define APTXHD_VENDOR_ID    0x000000D7u  /* Qualcomm Technologies International, Ltd */
-#define APTXHD_CODEC_ID     0x0024u      /* aptX HD */
-#define APTXLL_VENDOR_ID    0x0000000Au  /* CSR plc (now Qualcomm) */
-#define APTXLL_CODEC_ID     0x0002u      /* aptX Low Latency */
+#define SSC_VENDOR_ID       0x00000075u  /* Samsung Electronics */
+#define SSC_CODEC_ID        0x0103u      /* Samsung Scalable Codec */
+#define SSC_CAP_BASIC       0x0Cu        /* 44.1/48k at basic bitrates */
+#define SSC_CAP_UHQ         0x0Eu        /* basic + 96k UHQ */
 
 /* Singleton for static callback dispatch */
 BtStackTransport *BtStackTransport::instance_ = nullptr;
@@ -123,24 +121,6 @@ static const char *hci_error_string(uint8_t status) {
  * the "media codec information" portion (after media_type and codec_type),
  * which is: [vendor_id(4)] [codec_id(2)] [codec_specific_caps...]
  */
-
-/* LDAC capability bytes (after vendor ID + codec ID): 2 separate bytes.
- * Byte 6: Sampling Frequency — 0x20=44.1k, 0x10=48k, 0x08=88.2k, 0x04=96k
- * Byte 7: Channel Mode — 0x04=mono, 0x02=dual, 0x01=stereo */
-static const uint8_t LDAC_FREQ_ALL = 0x3C;          /* 44.1k|48k|88.2k|96k */
-static const uint8_t LDAC_CH_ALL   = 0x07;           /* mono|dual|stereo */
-static const uint8_t LDAC_FREQ_48K = 0x10;
-static const uint8_t LDAC_CH_STEREO = 0x01;
-
-/* aptX HD: sampling_freq(1) | channel_mode(1) */
-/* Freq: 44.1kHz=0x20, 48kHz=0x10 */
-/* Channel: mono=0x02, stereo=0x01 */
-static const uint8_t APTXHD_CAPS_ALL = 0x30 | 0x03;  /* 44.1+48, mono+stereo */
-static const uint8_t APTXHD_CONFIG_DEFAULT = 0x10 | 0x01;  /* 48kHz stereo */
-
-/* aptX LL: same format as aptX HD */
-static const uint8_t APTXLL_CAPS_ALL = 0x30 | 0x03;
-static const uint8_t APTXLL_CONFIG_DEFAULT = 0x10 | 0x01;
 
 /* Helper: write vendor ID (4 bytes LE) + codec ID (2 bytes LE) into buffer */
 static void write_vendor_codec_id(uint8_t *buf, uint32_t vendor_id, uint16_t codec_id) {
@@ -380,7 +360,7 @@ unsigned long __stdcall BtStackTransport::btstack_thread_proc(void *param) {
     gap_ssp_set_io_capability(SSP_IO_CAPABILITY_NO_INPUT_NO_OUTPUT);
     gap_ssp_set_authentication_requirement(0);  /* No MITM required */
 
-    gap_set_local_name("A2DPWB");
+    gap_set_local_name("SSC On Windows");
 
     /* Set device class: Audio (Major=0x04), Loudspeaker (Minor=0x14) — A2DP Source */
     gap_set_class_of_device(0x200414);
@@ -452,68 +432,6 @@ void BtStackTransport::register_codec_endpoints() {
      * BTstack matches these against remote device capabilities during connection.
      */
 
-    /* LDAC endpoint — 8 bytes: vendor_id(4) + codec_id(2) + freq(1) + ch(1) */
-    {
-        static uint8_t ldac_caps[8];
-        static uint8_t ldac_config[8];
-        write_vendor_codec_id(ldac_caps, LDAC_VENDOR_ID, LDAC_CODEC_ID);
-        ldac_caps[6] = LDAC_FREQ_ALL;
-        ldac_caps[7] = LDAC_CH_ALL;
-        write_vendor_codec_id(ldac_config, LDAC_VENDOR_ID, LDAC_CODEC_ID);
-        ldac_config[6] = LDAC_FREQ_48K;
-        ldac_config[7] = LDAC_CH_STEREO;
-
-        ldac_ep_ = a2dp_source_create_stream_endpoint(
-            AVDTP_AUDIO, AVDTP_CODEC_NON_A2DP,
-            ldac_caps, sizeof(ldac_caps),
-            ldac_config, sizeof(ldac_config)
-        );
-        if (ldac_ep_) {
-            ldac_local_seid_ = avdtp_local_seid(ldac_ep_);
-            fprintf(stderr, "BTstack: Registered LDAC endpoint (SEID=%u)\n", ldac_local_seid_);
-        }
-    }
-
-    /* aptX HD endpoint */
-    {
-        static uint8_t aptxhd_caps[7];
-        static uint8_t aptxhd_config[7];
-        write_vendor_codec_id(aptxhd_caps, APTXHD_VENDOR_ID, APTXHD_CODEC_ID);
-        aptxhd_caps[6] = APTXHD_CAPS_ALL;
-        write_vendor_codec_id(aptxhd_config, APTXHD_VENDOR_ID, APTXHD_CODEC_ID);
-        aptxhd_config[6] = APTXHD_CONFIG_DEFAULT;
-
-        aptxhd_ep_ = a2dp_source_create_stream_endpoint(
-            AVDTP_AUDIO, AVDTP_CODEC_NON_A2DP,
-            aptxhd_caps, sizeof(aptxhd_caps),
-            aptxhd_config, sizeof(aptxhd_config)
-        );
-        if (aptxhd_ep_) {
-            aptxhd_local_seid_ = avdtp_local_seid(aptxhd_ep_);
-            fprintf(stderr, "BTstack: Registered aptX HD endpoint (SEID=%u)\n", aptxhd_local_seid_);
-        }
-    }
-
-    /* aptX LL endpoint */
-    {
-        static uint8_t aptxll_caps[7];
-        static uint8_t aptxll_config[7];
-        write_vendor_codec_id(aptxll_caps, APTXLL_VENDOR_ID, APTXLL_CODEC_ID);
-        aptxll_caps[6] = APTXLL_CAPS_ALL;
-        write_vendor_codec_id(aptxll_config, APTXLL_VENDOR_ID, APTXLL_CODEC_ID);
-        aptxll_config[6] = APTXLL_CONFIG_DEFAULT;
-
-        aptxll_ep_ = a2dp_source_create_stream_endpoint(
-            AVDTP_AUDIO, AVDTP_CODEC_NON_A2DP,
-            aptxll_caps, sizeof(aptxll_caps),
-            aptxll_config, sizeof(aptxll_config)
-        );
-        if (aptxll_ep_) {
-            aptxll_local_seid_ = avdtp_local_seid(aptxll_ep_);
-            fprintf(stderr, "BTstack: Registered aptX LL endpoint (SEID=%u)\n", aptxll_local_seid_);
-        }
-    }
-
     /* SBC endpoint — standard A2DP codec (mandatory) */
     {
         /*
@@ -557,6 +475,26 @@ void BtStackTransport::register_codec_endpoints() {
         if (aac_ep_) {
             aac_local_seid_ = avdtp_local_seid(aac_ep_);
             fprintf(stderr, "BTstack: Registered AAC endpoint (SEID=%u)\n", aac_local_seid_);
+        }
+    }
+
+    /* SSC endpoint — Samsung vendor codec (0x75 / 0x0103) */
+    {
+        static uint8_t ssc_caps[7];
+        static uint8_t ssc_config[7];
+        write_vendor_codec_id(ssc_caps, SSC_VENDOR_ID, SSC_CODEC_ID);
+        ssc_caps[6] = SSC_CAP_UHQ;      /* advertise 44.1/48k + 96k */
+        write_vendor_codec_id(ssc_config, SSC_VENDOR_ID, SSC_CODEC_ID);
+        ssc_config[6] = SSC_CAP_BASIC;  /* default config: 48k-class */
+
+        ssc_ep_ = a2dp_source_create_stream_endpoint(
+            AVDTP_AUDIO, AVDTP_CODEC_NON_A2DP,
+            ssc_caps, sizeof(ssc_caps),
+            ssc_config, sizeof(ssc_config)
+        );
+        if (ssc_ep_) {
+            ssc_local_seid_ = avdtp_local_seid(ssc_ep_);
+            fprintf(stderr, "BTstack: Registered SSC endpoint (SEID=%u)\n", ssc_local_seid_);
         }
     }
 }
@@ -681,6 +619,57 @@ bool BtStackTransport::scan_devices(uint8_t duration_seconds) {
     return inquiry_found_count_.load() > 0;
 }
 
+/* ======================================================================== */
+/* Link key seeding / readback (5.6: persistent profile keys)                */
+/* ======================================================================== */
+
+bool BtStackTransport::seed_link_key(const uint8_t remote_addr[6],
+                                     const std::string &key_hex, int type) {
+    if (link_key_dir_.empty()) return false;
+    if (key_hex.size() != 32) return false;
+
+    link_key_t key;
+    for (int i = 0; i < 16; i++) {
+        unsigned int b = 0;
+        char pair[3] = { key_hex[i * 2], key_hex[i * 2 + 1], '\0' };
+        if (sscanf(pair, "%02x", &b) != 1) return false;
+        key[i] = (uint8_t)b;
+    }
+
+    bd_addr_t addr;
+    for (int i = 0; i < 6; i++) addr[i] = remote_addr[5 - i];
+
+    btstack_link_key_db_file_instance()->put_link_key(addr, key, (link_key_type_t)type);
+    fprintf(stderr, "BTstack: seeded link key for %02X:%02X:%02X:%02X:%02X:%02X\n",
+            addr[0], addr[1], addr[2], addr[3], addr[4], addr[5]);
+    return true;
+}
+
+bool BtStackTransport::get_link_key_hex(const uint8_t remote_addr[6],
+                                        std::string &key_hex, int &type) {
+    if (link_key_dir_.empty()) return false;
+
+    bd_addr_t addr;
+    for (int i = 0; i < 6; i++) addr[i] = remote_addr[5 - i];
+
+    link_key_t key;
+    link_key_type_t key_type;
+    if (!btstack_link_key_db_file_instance()->get_link_key(addr, key, &key_type)) {
+        return false;
+    }
+
+    char hex[33];
+    for (int i = 0; i < 16; i++) sprintf(&hex[i * 2], "%02x", key[i]);
+    hex[32] = '\0';
+    key_hex = hex;
+    type = (int)key_type;
+    return true;
+}
+
+/* ======================================================================== */
+/* Connect                                                                   */
+/* ======================================================================== */
+
 bool BtStackTransport::connect_a2dp(const uint8_t remote_addr[6]) {
     if (!hci_ready_.load()) return false;
 
@@ -751,21 +740,6 @@ bool BtStackTransport::configure_codec(AudioCodec codec, uint32_t sample_rate, u
     /* Determine local and remote SEIDs based on codec */
     uint8_t local = 0, remote = 0;
     switch (codec) {
-    case AudioCodec::LDAC:
-        if (!remote_caps_.ldac) return false;
-        local = ldac_local_seid_;
-        remote = remote_caps_.ldac_seid;
-        break;
-    case AudioCodec::AptxHD:
-        if (!remote_caps_.aptx_hd) return false;
-        local = aptxhd_local_seid_;
-        remote = remote_caps_.aptxhd_seid;
-        break;
-    case AudioCodec::AptxLL:
-        if (!remote_caps_.aptx_ll) return false;
-        local = aptxll_local_seid_;
-        remote = remote_caps_.aptxll_seid;
-        break;
     case AudioCodec::SBC:
         if (!remote_caps_.sbc) return false;
         local = sbc_local_seid_;
@@ -775,6 +749,11 @@ bool BtStackTransport::configure_codec(AudioCodec codec, uint32_t sample_rate, u
         if (!remote_caps_.aac) return false;
         local = aac_local_seid_;
         remote = remote_caps_.aac_seid;
+        break;
+    case AudioCodec::SSC:
+        if (!remote_caps_.ssc) return false;
+        local = ssc_local_seid_;
+        remote = remote_caps_.ssc_seid;
         break;
     }
 
@@ -787,29 +766,20 @@ bool BtStackTransport::configure_codec(AudioCodec codec, uint32_t sample_rate, u
     uint8_t config_len = 0;
 
     switch (codec) {
-    case AudioCodec::LDAC: {
-        write_vendor_codec_id(config_info, LDAC_VENDOR_ID, LDAC_CODEC_ID);
-        uint8_t freq = (sample_rate == 44100) ? 0x20 :
-                       (sample_rate == 48000) ? 0x10 :
-                       (sample_rate == 88200) ? 0x08 : 0x04;
-        uint8_t ch = (channels == 1) ? 0x04 : 0x01;  /* mono or stereo */
-        config_info[6] = freq;
-        config_info[7] = ch;
-        config_len = 8;
-        break;
-    }
-    case AudioCodec::AptxHD: {
-        write_vendor_codec_id(config_info, APTXHD_VENDOR_ID, APTXHD_CODEC_ID);
-        uint8_t freq = (sample_rate == 44100) ? 0x20 : 0x10;
-        config_info[6] = freq | 0x01;  /* stereo */
+    case AudioCodec::SSC: {
+        write_vendor_codec_id(config_info, SSC_VENDOR_ID, SSC_CODEC_ID);
+        /* capability byte: advertise both basic & 96k so the source
+         * selects matching config. Freq isn't in SSC codec info beyond
+         * this; the bitrate is chosen by the encoder instance. */
+        config_info[6] = (sample_rate == 88200 || sample_rate == 96000)
+                             ? SSC_CAP_UHQ : SSC_CAP_BASIC;
         config_len = 7;
-        break;
-    }
-    case AudioCodec::AptxLL: {
-        write_vendor_codec_id(config_info, APTXLL_VENDOR_ID, APTXLL_CODEC_ID);
-        uint8_t freq = (sample_rate == 44100) ? 0x20 : 0x10;
-        config_info[6] = freq | 0x01;  /* stereo */
-        config_len = 7;
+        if ((sample_rate == 88200 || sample_rate == 96000) && !remote_caps_.ssc_uhq) {
+            fprintf(stderr,
+                    "BTstack: WARNING — UHQ requested but remote SSC cap=0x%02X "
+                    "has no UHQ(0x02) bit; remote may not decode 96 kHz\n",
+                    remote_caps_.ssc_cap);
+        }
         break;
     }
     case AudioCodec::SBC:
@@ -1088,16 +1058,7 @@ bool BtStackTransport::send_media(const uint8_t *data, uint32_t size,
         MediaPacket &slot = media_queue_[media_queue_head_];
 
         /* Build the media payload */
-        if (codec == AudioCodec::LDAC) {
-            if (size + 1 > sizeof(slot.data)) {
-                send_failure_count_.fetch_add(1);
-                return false;
-            }
-            uint8_t cs = (channels_ >= 2) ? 0x04 : 0x00; /* CS: 10=Stereo, 00=Mono */
-            slot.data[0] = ((frames & 0x0F) << 4) | cs;
-            memcpy(slot.data + 1, data, size);
-            slot.size = size + 1;
-        } else if (codec == AudioCodec::SBC) {
+        if (codec == AudioCodec::SBC) {
             if (size + 1 > sizeof(slot.data)) {
                 send_failure_count_.fetch_add(1);
                 return false;
@@ -1107,7 +1068,7 @@ bool BtStackTransport::send_media(const uint8_t *data, uint32_t size,
             memcpy(slot.data + 1, data, size);
             slot.size = size + 1;
         } else {
-            /* aptX HD, aptX LL, AAC: raw payload, no additional header */
+            /* AAC and SSC: raw payload, no additional header */
             if (size > sizeof(slot.data)) {
                 send_failure_count_.fetch_add(1);
                 return false;
@@ -1351,18 +1312,19 @@ void BtStackTransport::handle_a2dp_event(uint8_t *packet, uint16_t size) {
             uint32_t vid = read_vendor_id(info);
             uint16_t cid = read_codec_id(info);
 
-            if (vid == LDAC_VENDOR_ID && cid == LDAC_CODEC_ID) {
-                remote_caps_.ldac = true;
-                remote_caps_.ldac_seid = remote_seid;
-                fprintf(stderr, "BTstack: Remote supports LDAC (SEID=%u)\n", remote_seid);
-            } else if (vid == APTXHD_VENDOR_ID && cid == APTXHD_CODEC_ID) {
-                remote_caps_.aptx_hd = true;
-                remote_caps_.aptxhd_seid = remote_seid;
-                fprintf(stderr, "BTstack: Remote supports aptX HD (SEID=%u)\n", remote_seid);
-            } else if (vid == APTXLL_VENDOR_ID && cid == APTXLL_CODEC_ID) {
-                remote_caps_.aptx_ll = true;
-                remote_caps_.aptxll_seid = remote_seid;
-                fprintf(stderr, "BTstack: Remote supports aptX LL (SEID=%u)\n", remote_seid);
+            if (vid == SSC_VENDOR_ID && cid == SSC_CODEC_ID) {
+                remote_caps_.ssc = true;
+                remote_caps_.ssc_seid = remote_seid;
+                if (info_len >= 7) {
+                    remote_caps_.ssc_cap = info[6];
+                    remote_caps_.ssc_uhq = (info[6] & 0x02u) != 0;
+                }
+                fprintf(stderr,
+                        "BTstack: Remote supports SSC (SEID=%u cap=0x%02X uhq=%d) [",
+                        remote_seid, info_len >= 7 ? info[6] : 0,
+                        info_len >= 7 ? (int)remote_caps_.ssc_uhq : 0);
+                for (uint16_t i = 0; i < info_len; ++i) fprintf(stderr, "%02X", info[i]);
+                fprintf(stderr, "]\n");
             }
         }
         break;
@@ -1388,9 +1350,8 @@ void BtStackTransport::handle_a2dp_event(uint8_t *packet, uint16_t size) {
 
     case A2DP_SUBEVENT_SIGNALING_CAPABILITIES_COMPLETE: {
         /* All SEP capabilities have been discovered */
-        fprintf(stderr, "BTstack: Capability discovery complete (LDAC=%d, aptXHD=%d, aptXLL=%d, SBC=%d, AAC=%d)\n",
-               remote_caps_.ldac, remote_caps_.aptx_hd, remote_caps_.aptx_ll,
-               remote_caps_.sbc, remote_caps_.aac);
+        fprintf(stderr, "BTstack: Capability discovery complete (SBC=%d, AAC=%d, SSC=%d)\n",
+               remote_caps_.sbc, remote_caps_.aac, remote_caps_.ssc);
         connected_.store(true);
         connect_result_.store(true);
         signal_event(connect_event_, true);
@@ -1469,6 +1430,11 @@ void BtStackTransport::handle_a2dp_event(uint8_t *packet, uint16_t size) {
          * so send_mutex isn't held during the L2CAP write (which can
          * block the WASAPI thread trying to enqueue in send_media). */
         {
+            static uint32_t diag_can_send = 0;
+            static uint32_t diag_tx_ok = 0;
+            static uint32_t diag_tx_err = 0;
+            static DWORD diag_last = 0;
+            diag_can_send++;
             MediaPacket pkt;
             bool have_packet = false;
             {
@@ -1489,10 +1455,21 @@ void BtStackTransport::handle_a2dp_event(uint8_t *packet, uint16_t size) {
                         pkt.data, (uint16_t)pkt.size);
                     if (status != ERROR_CODE_SUCCESS) {
                         send_failure_count_.fetch_add(1);
+                        diag_tx_err++;
+                    } else {
+                        diag_tx_ok++;
                     }
                 } else {
                     send_failure_count_.fetch_add(1);
+                    diag_tx_err++;
                 }
+            }
+            DWORD now = GetTickCount();
+            if (now - diag_last >= 2000) {
+                diag_last = now;
+                fprintf(stderr, "BTstack: CTX can_send=%u ok=%u err=%u q=%u\n",
+                        diag_can_send, diag_tx_ok, diag_tx_err,
+                        media_queue_count_.load());
             }
             /* Chain next CAN_SEND_NOW if queue still has data.
              * If empty, send_media() will trigger when new data arrives. */
@@ -1567,6 +1544,9 @@ void BtStackTransport::handle_avrcp_event(uint8_t *packet, uint16_t size) {
         fprintf(stderr, "BTstack: AVRCP volume changed to %u (%u%%)\n",
                 vol, vol * 100 / 127);
 
+        remote_volume_.store(vol);
+        if (volume_changed_cb_) volume_changed_cb_(vol);
+
         /* Re-register notification (AVRCP spec requires re-subscribing after each) */
         avrcp_controller_enable_notification(avrcp_cid_,
             AVRCP_NOTIFICATION_EVENT_VOLUME_CHANGED);
@@ -1577,12 +1557,42 @@ void BtStackTransport::handle_avrcp_event(uint8_t *packet, uint16_t size) {
         uint8_t vol = avrcp_subevent_set_absolute_volume_response_get_absolute_volume(packet);
         fprintf(stderr, "BTstack: AVRCP absolute volume confirmed: %u (%u%%)\n",
                 vol, vol * 100 / 127);
+        remote_volume_.store(vol);
         break;
     }
 
     default:
         break;
     }
+}
+
+bool BtStackTransport::set_absolute_volume(uint8_t volume) {
+    if (volume > 127) volume = 127;
+    if (avrcp_cid_ == 0) return false;
+
+    /* BTstack is not thread-safe: dispatch the API call to the run-loop thread. */
+    struct VolumeRequest {
+        btstack_context_callback_registration_t reg;
+        uint16_t cid;
+        uint8_t  volume;
+    };
+    auto *req = new VolumeRequest();
+    req->cid = avrcp_cid_;
+    req->volume = volume;
+    req->reg.callback = [](void *ctx) {
+        auto *r = static_cast<VolumeRequest *>(ctx);
+        avrcp_controller_set_absolute_volume(r->cid, r->volume);
+        delete r;
+    };
+    req->reg.context = req;
+    btstack_run_loop_execute_on_main_thread(&req->reg);
+
+    remote_volume_.store(volume);
+    return true;
+}
+
+void BtStackTransport::set_volume_changed_callback(std::function<void(uint8_t)> cb) {
+    volume_changed_cb_ = std::move(cb);
 }
 
 /* ======================================================================== */
@@ -1605,39 +1615,4 @@ bool BtStackTransport::wait_for_event(void *event_handle, uint32_t timeout_ms) {
     return (result == WAIT_OBJECT_0);  /* only first handle = success */
 }
 
-/* ======================================================================== */
-/* Codec Capability Builders (for endpoint registration)                    */
-/* ======================================================================== */
-
-void BtStackTransport::build_ldac_capabilities(uint8_t *caps, uint16_t *len,
-                                                uint8_t *config, uint16_t *config_len) {
-    write_vendor_codec_id(caps, LDAC_VENDOR_ID, LDAC_CODEC_ID);
-    caps[6] = LDAC_FREQ_ALL;
-    caps[7] = LDAC_CH_ALL;
-    *len = 8;
-    write_vendor_codec_id(config, LDAC_VENDOR_ID, LDAC_CODEC_ID);
-    config[6] = LDAC_FREQ_48K;
-    config[7] = LDAC_CH_STEREO;
-    *config_len = 8;
-}
-
-void BtStackTransport::build_aptxhd_capabilities(uint8_t *caps, uint16_t *len,
-                                                   uint8_t *config, uint16_t *config_len) {
-    write_vendor_codec_id(caps, APTXHD_VENDOR_ID, APTXHD_CODEC_ID);
-    caps[6] = APTXHD_CAPS_ALL;
-    *len = 7;
-    write_vendor_codec_id(config, APTXHD_VENDOR_ID, APTXHD_CODEC_ID);
-    config[6] = APTXHD_CONFIG_DEFAULT;
-    *config_len = 7;
-}
-
-void BtStackTransport::build_aptxll_capabilities(uint8_t *caps, uint16_t *len,
-                                                   uint8_t *config, uint16_t *config_len) {
-    write_vendor_codec_id(caps, APTXLL_VENDOR_ID, APTXLL_CODEC_ID);
-    caps[6] = APTXLL_CAPS_ALL;
-    *len = 7;
-    write_vendor_codec_id(config, APTXLL_VENDOR_ID, APTXLL_CODEC_ID);
-    config[6] = APTXLL_CONFIG_DEFAULT;
-    *config_len = 7;
-}
 

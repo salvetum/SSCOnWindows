@@ -1,45 +1,59 @@
-# Contributing to A2DP Windows Bridge (A2DPWB)
+# Contributing to SSC On Windows
 
-Thank you for your interest in contributing to A2DP Windows Bridge!
+Thank you for your interest in improving **SSC On Windows** — a fork of
+[A2DP Windows Bridge](https://github.com/SeiyaFunaokaJP/A2DP-Windows-Bridge) that
+adds Samsung SSC streaming.
 
 ## Bug Reports & Feature Requests
 
-Please use [GitHub Issues](https://github.com/SeiyaFunaokaJP/A2DP-Windows-Bridge/issues) for bug reports and feature requests.
+This is a fork; the recommended place for fork-specific issues is this
+repository's issue tracker. For anything that is clearly upstream
+(A2DP Windows Bridge core), the
+[upstream issues](https://github.com/SeiyaFunaokaJP/A2DP-Windows-Bridge/issues)
+may also be relevant.
 
-- **Bug reports**: Include steps to reproduce, expected behavior, and actual behavior.
-- **Feature requests**: Describe the feature you'd like and why it would be useful.
+- **Bug reports**: include steps to reproduce, expected vs. actual behavior, and
+  the relevant stderr/diagnostic output (`CAP:`, `SSC:`, `WasapiCapture: CLK`,
+  `BTstack: CTX`, `CB:`).
+- **Feature requests**: describe the feature and why it is useful.
 
 ## Building from Source
 
-For detailed setup instructions, see the [GitHub Pages](https://seiyafunaokajp.github.io/A2DP-Windows-Bridge/) documentation.
-
-### Quick Start
+See [docs/building.md](docs/building.md) and the [README](README.md) for full
+instructions. Quick start:
 
 **Requirements:**
 
 - Windows 10/11 (x64)
-- Visual Studio 2022 or later with C++ desktop workload
-- CMake 3.16+
+- Visual Studio 2022 or later with the "Desktop development with C++" workload
+- CMake 3.16+ (with CMake 4.x, pass `-DCMAKE_POLICY_VERSION_MINIMUM=3.5`)
 - Git
+- For SSC streaming: WSL2 (default) or Python 3.14 + Qiling (native)
 
-**Build:**
+**Build the core / CLI:**
 
-```bash
-git clone --recursive https://github.com/SeiyaFunaokaJP/A2DP-Windows-Bridge.git
-cd A2DP-Windows-Bridge
-cmake -B build -A x64
-cmake --build build --config Release
+```powershell
+git clone --recursive <this-repo-url> SSCOnWindows
+cmake -S SSCOnWindows -B SSCOnWindows\build_msvc -A x64 "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+cmake --build SSCOnWindows\build_msvc --config Release --target A2DPWB -j 8
 ```
 
-> The first build takes several minutes because CMake FetchContent downloads and compiles wxWidgets.
+**Apply the submodule patch after cloning:**
+
+```powershell
+git -C extern/btstack apply ..\..\patches\btstack-win-usb-logs.patch
+```
+
+**Build the WinUI GUI:** see [docs/building.md](docs/building.md).
 
 ## Pull Requests
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/my-feature`)
-3. Commit your changes (`git commit -m "Add my feature"`)
-4. Push to the branch (`git push origin feature/my-feature`)
-5. Open a [Pull Request](https://github.com/SeiyaFunaokaJP/A2DP-Windows-Bridge/pulls)
+3. Keep the codec fallback priority (SSC > AAC > SBC) and the SSC int32 scale
+   (2^29) consistent between the CLI and the service backend
+4. Commit your changes (`git commit -m "Add my feature"`)
+5. Push and open a pull request
 
 ## License
 

@@ -17,6 +17,7 @@
 #include <vector>
 #include <atomic>
 #include <mutex>
+#include <functional>
 
 /* BTstack forward declarations (avoid exposing full BTstack headers) */
 struct btstack_timer_source;
@@ -81,7 +82,21 @@ public:
      */
     bool connect_a2dp(const uint8_t remote_addr[6]);
 
-    /* Disconnect from the remote device */
+    /*
+     * Seed a stored link key for a device into the persistent key DB before
+     * connecting, so a previously-paired device reconnects without pairing.
+     * remote_addr: caller byte order (Windows BTH_ADDR / little-endian).
+     * key_hex: 32 lowercase hex chars (16 bytes). type: link_key_type_t value.
+     * Returns false if the file DB is disabled or the key is malformed.
+     */
+    bool seed_link_key(const uint8_t remote_addr[6], const std::string &key_hex, int type);
+
+    /* Read back the current link key for a device from the persistent DB.
+     * remote_addr: caller byte order. Returns false if not stored. */
+    bool get_link_key_hex(const uint8_t remote_addr[6], std::string &key_hex, int &type);
+
+    /*
+     * Disconnect from the remote device */
     bool disconnect();
 
     /* Cancel any blocking wait_for_event() calls (thread-safe) */
@@ -119,10 +134,22 @@ public:
     bool is_connected() const;
     bool is_streaming() const;
 
-    /* Get and reset the count of failed send_media calls (for ABR) */
+    /*
+     * AVRCP absolute volume (0-127). Sets the remote device's hardware volume.
+     * Returns false if there is no active AVRCP connection.
+     */
+    bool set_absolute_volume(uint8_t volume);
+
+    /* Get the last absolute volume reported by the device (0-127, 0 = unknown). */
+    uint8_t get_absolute_volume() const { return remote_volume_.load(); }
+
+    /* Callback fired (from the BTstack thread) when the device changes volume. */
+    void set_volume_changed_callback(std::function<void(uint8_t)> cb);
+
+    /* Get and reset the count of failed send_media calls (for telemetry) */
     uint32_t get_and_reset_send_failure_count();
 
-    /* Get current queue depth (instantaneous packet count, for ABR TxQueueDepth) */
+    /* Get current queue depth (instantaneous packet count, for stats) */
     uint32_t get_queue_depth() const;
 
     /* Get the codec selected during connect (for auto-mode) */
@@ -144,17 +171,16 @@ public:
 
     /* Codec support flags discovered from remote device */
     struct RemoteCodecCaps {
-        bool ldac = false;
-        bool aptx_hd = false;
-        bool aptx_ll = false;
         bool sbc = false;
         bool aac = false;
+        bool ssc = false;
         /* Remote SEIDs for each codec */
-        uint8_t ldac_seid = 0;
-        uint8_t aptxhd_seid = 0;
-        uint8_t aptxll_seid = 0;
         uint8_t sbc_seid = 0;
         uint8_t aac_seid = 0;
+        uint8_t ssc_seid = 0;
+        /* Remote SSC codec-specific capability byte (0 = unknown/not reported) */
+        uint8_t ssc_cap = 0;
+        bool ssc_uhq = false;   /* remote advertised UHQ2/96k bit (0x02) */
     };
 
     /* Get discovered remote capabilities (valid after connect_a2dp) */
@@ -177,14 +203,6 @@ private:
 
     /* Register codec stream endpoints with BTstack */
     void register_codec_endpoints();
-
-    /* Build vendor codec capability blobs */
-    void build_ldac_capabilities(uint8_t *caps, uint16_t *len,
-                                 uint8_t *config, uint16_t *config_len);
-    void build_aptxhd_capabilities(uint8_t *caps, uint16_t *len,
-                                   uint8_t *config, uint16_t *config_len);
-    void build_aptxll_capabilities(uint8_t *caps, uint16_t *len,
-                                   uint8_t *config, uint16_t *config_len);
 
     /* Signal a waiting synchronous call */
     void signal_event(void *event_handle, bool success);
@@ -216,24 +234,24 @@ private:
     uint16_t media_mtu_ = 0;
 
     /* Stream endpoint SEIDs */
-    uint8_t ldac_local_seid_ = 0;
-    uint8_t aptxhd_local_seid_ = 0;
-    uint8_t aptxll_local_seid_ = 0;
     uint8_t sbc_local_seid_ = 0;
     uint8_t aac_local_seid_ = 0;
+    uint8_t ssc_local_seid_ = 0;
 
     /* Stream endpoint pointers (owned by BTstack) */
-    avdtp_stream_endpoint *ldac_ep_ = nullptr;
-    avdtp_stream_endpoint *aptxhd_ep_ = nullptr;
-    avdtp_stream_endpoint *aptxll_ep_ = nullptr;
     avdtp_stream_endpoint *sbc_ep_ = nullptr;
     avdtp_stream_endpoint *aac_ep_ = nullptr;
+    avdtp_stream_endpoint *ssc_ep_ = nullptr;
 
     /* Remote capabilities discovered during connection */
     RemoteCodecCaps remote_caps_;
 
+    /* Last absolute volume reported by/for the device (0-127; 0 = unknown) */
+    std::atomic<uint8_t> remote_volume_{0};
+    std::function<void(uint8_t)> volume_changed_cb_;
+
     /* Selected codec and config */
-    AudioCodec selected_codec_ = AudioCodec::LDAC;
+    AudioCodec selected_codec_ = AudioCodec::SSC;
     uint32_t sample_rate_ = 48000;
     uint8_t channels_ = 2;
 
@@ -274,8 +292,8 @@ private:
     std::atomic<uint32_t> send_failure_count_{0};
 
     /* Media packet queue: WASAPI thread writes, BTstack thread reads.
-     * Ring buffer avoids dropping frames when multiple LDAC frames are
-     * produced per WASAPI callback (e.g. 4 frames/10ms at 990kbps). */
+     * Ring buffer avoids dropping frames when multiple codec frames are
+     * produced per WASAPI callback. */
     struct MediaPacket {
         uint8_t  data[1024];
         uint32_t size = 0;

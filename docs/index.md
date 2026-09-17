@@ -4,12 +4,14 @@ layout: default
 nav_order: 1
 ---
 
-# A2DP Windows Bridge (A2DPWB)
+# SSC On Windows
 
-Bluetooth A2DP audio streaming for Windows with full codec support.
+Stream Windows system audio to Samsung Galaxy Buds over **Samsung Scalable Codec (SSC)**.
 {: .fs-6 .fw-300 }
 
-Streams system audio via **LDAC, aptX HD, aptX Low Latency, AAC, SBC** using a USB Bluetooth adapter in WinUSB mode -- no kernel driver or test signing required.
+A fork of [A2DP Windows Bridge](https://github.com/SeiyaFunaokaJP/A2DP-Windows-Bridge)
+by Seiya Funaoka, adding a full SSC encoder pipeline alongside **AAC** and **SBC**.
+Version 0.1, by **Salvetum**.
 
 [Get Started](setup){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
 [GitHub](https://github.com/SeiyaFunaokaJP/A2DP-Windows-Bridge){: .btn .fs-5 .mb-4 .mb-md-0 }
@@ -18,55 +20,60 @@ Streams system audio via **LDAC, aptX HD, aptX Low Latency, AAC, SBC** using a U
 
 ## Supported Codecs
 
-| Codec | Bitrate | Sample Rate | Bit Depth | Latency |
-|:------|:--------|:------------|:----------|:--------|
-| LDAC | 330/660/990 kbps | 44.1--96 kHz | 16/24/32 bit | ~200 ms |
-| aptX HD | 576 kbps | 44.1/48 kHz | 24 bit | ~150 ms |
-| aptX Low Latency | 352 kbps | 44.1/48 kHz | 16 bit | ~32 ms |
-| AAC | 128/192/256 kbps | 44.1/48 kHz | 16 bit | ~150 ms |
-| SBC | up to ~345 kbps | 44.1/48 kHz | 16 bit | ~150 ms |
+| Codec | Bitrate | Sample Rate | Status |
+|:------|:--------|:------------|:-------|
+| **SSC** (default) | High 229 / Standard 192 / Mobile 128 kbps; UHQ 584 / 442 / 250 kbps | 48 kHz (UHQ: 96 kHz) | Primary target |
+| AAC | 128/192/256 kbps | 48 kHz | Via FDK-AAC |
+| SBC | up to ~345 kbps | 48 kHz | Baseline fallback |
+
+Fallback priority: **SSC > AAC > SBC**. SSC UHQ (96 kHz) requires a UHQ-capable
+sink (Galaxy Buds3 FE advertises no UHQ and falls back to 48 kHz).
 
 ## Audio Capture Modes
 
-A2DPWB captures audio via WASAPI and offers two modes:
+Audio is captured via WASAPI in one of two modes:
 
 | Mode | Description | Use Case |
 |:-----|:------------|:---------|
-| **System Loopback** | Captures all system audio output from the default playback device via WASAPI loopback | Simple setup -- all sounds are streamed |
-| **Virtual Device** | Captures from a user-selected virtual audio device (e.g., VB-CABLE, VoiceMeeter) | Route specific apps to Bluetooth while keeping other audio on speakers |
+| **System Loopback** | Captures all system audio output from the default playback device | Simple setup -- all sounds are streamed |
+| **Virtual Device** | Captures from a user-selected virtual audio device (e.g., VB-CABLE, VoiceMeeter) | Route specific apps to Bluetooth while other audio stays on speakers |
 
-In **Virtual Device** mode, A2DPWB switches the Windows default playback device to the selected virtual device, then captures its loopback output. Apps that output to the virtual device are streamed over Bluetooth.
+In **Virtual Device** mode, the app switches the Windows default playback device to
+the selected virtual device and captures its loopback output.
 
 ## How It Works
 
 ```
-Audio Source
-  |
-  +-- System Loopback: default playback device (all system audio)
-  +-- Virtual Device:  selected virtual audio device (per-app routing)
+Audio Source (default output or virtual device)
   |
   v
-WASAPI Loopback Capture (PCM)
+WASAPI Loopback Capture (48 kHz, float32)
   |
   v
-Audio Encoder (LDAC / aptX HD / aptX LL / AAC / SBC)
+Encoder  (SSC  |  AAC  |  SBC)
+  |
+  |  SSC only: TCP :20248 -> WSL2/Qiling daemon -> Samsung libScalable_Encoder.so (aarch64)
   |
   v
-BTstack (A2DP Source -> AVDTP -> L2CAP -> HCI)
+BTstack  (A2DP Source -> AVDTP -> L2CAP -> HCI)
   |
   v
 WinUSB -> USB Bluetooth Adapter -> Headphones
 ```
 
-A2DPWB bypasses the Windows Bluetooth stack entirely. It communicates directly with a USB Bluetooth adapter through WinUSB, using [BTstack](https://github.com/bluekitchen/btstack) to implement the full Bluetooth protocol stack in user-mode.
+The Windows Bluetooth stack is bypassed entirely. A dedicated USB Bluetooth
+adapter is switched to a generic **WinUSB** driver and driven directly by
+[BTstack](https://github.com/bluekitchen/btstack) in user mode. The SSC encoder is
+the actual Samsung aarch64 blob, run inside an emulator behind a local TCP daemon.
 
 ## Features
 
-- **Multi-codec**: LDAC, aptX HD, aptX Low Latency, AAC, SBC with automatic negotiation
-- **Two capture modes**: System loopback or virtual audio device routing
-- **LDAC ABR**: Adaptive Bit Rate for unstable connections
-- **Auto-reconnect**: Reconnects on disconnection (up to 10 attempts)
-- **Profile management**: Save and load device + codec configurations
-- **GUI + CLI**: wxWidgets graphical interface or command-line operation
-- **Localization**: English / Japanese
-- **Realtek firmware**: Guided firmware download for Realtek adapters
+- **SSC (Samsung Scalable Codec)**: High / Standard / Mobile, plus 96 kHz UHQ on capable sinks
+- **AAC and SBC** fallback codecs
+- **In-app driver toggle**: switch the dongle between WinUSB and Windows Bluetooth (no Zadig needed)
+- **Two capture modes**: system loopback or virtual audio device routing
+- **Auto-reconnect** on disconnection (up to 10 attempts)
+- **AVRCP absolute volume**: control headphone volume from the app
+- **WinUI 3 GUI + CLI**
+- **Live stats**: latency, error rate, loss, queue depth, sparklines
+- **Profile management**, **Realtek firmware** helper, **English/Japanese UI**

@@ -15,7 +15,7 @@ using json = nlohmann::json;
 
 std::string AppSettings::get_settings_path() const
 {
-    return get_config_dir() + "settings.json";
+    return get_config_dir() + "\\settings.json";
 }
 
 void AppSettings::load()
@@ -39,6 +39,7 @@ void AppSettings::load()
     start_with_windows = j.value("start_with_windows", start_with_windows);
     start_minimized    = j.value("start_minimized", start_minimized);
     minimize_to_tray   = j.value("minimize_to_tray", minimize_to_tray);
+    auto_connect_on_start = j.value("auto_connect_on_start", auto_connect_on_start);
 
     /* Debug */
     debug_mode = j.value("debug_mode", debug_mode);
@@ -49,6 +50,10 @@ void AppSettings::load()
 
     /* Window state */
     last_profile  = j.value("last_profile", last_profile);
+
+    /* Last device */
+    last_device_mac   = j.value("last_device_mac", last_device_mac);
+    last_device_name  = j.value("last_device_name", last_device_name);
 }
 
 void AppSettings::save() const
@@ -63,6 +68,7 @@ void AppSettings::save() const
     j["start_with_windows"] = start_with_windows;
     j["start_minimized"]    = start_minimized;
     j["minimize_to_tray"]   = minimize_to_tray;
+    j["auto_connect_on_start"] = auto_connect_on_start;
 
     /* Debug */
     j["debug_mode"] = debug_mode;
@@ -73,6 +79,10 @@ void AppSettings::save() const
 
     /* Window state */
     j["last_profile"]  = last_profile;
+
+    /* Last device */
+    j["last_device_mac"]   = last_device_mac;
+    j["last_device_name"]  = last_device_name;
 
     std::ofstream ofs(get_settings_path());
     if (ofs.is_open())

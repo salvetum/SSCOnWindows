@@ -1,9 +1,3 @@
-[submodule "extern/libldac"]
-	path = extern/libldac
-	url = https://android.googlesource.com/platform/external/libldac
-[submodule "extern/libopenaptx"]
-	path = extern/libopenaptx
-	url = https://github.com/pali/libopenaptx.git
 [submodule "extern/btstack"]
 	path = extern/btstack
 	url = https://github.com/bluekitchen/btstack.git

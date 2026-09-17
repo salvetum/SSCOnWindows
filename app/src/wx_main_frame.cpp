@@ -20,7 +20,7 @@
 #include <shellapi.h>
 
 #ifndef APP_VERSION
-#define APP_VERSION "1.0.1"
+#define APP_VERSION "0.1"
 #endif
 
 wxDEFINE_EVENT(wxEVT_STATUS_UPDATE, wxThreadEvent);
@@ -37,7 +37,7 @@ wxEND_EVENT_TABLE()
 /* ======================================================================== */
 
 MainFrame::MainFrame()
-    : wxFrame(nullptr, wxID_ANY, wxString::Format("A2DPWB v%s", APP_VERSION),
+    : wxFrame(nullptr, wxID_ANY, wxString::Format("SSC On Windows v%s", APP_VERSION),
               wxDefaultPosition, wxSize(520, 600),
               wxDEFAULT_FRAME_STYLE & ~(wxRESIZE_BORDER | wxMAXIMIZE_BOX))
 {
@@ -94,7 +94,7 @@ MainFrame::MainFrame()
         if (hIcon)
             tray_ico.CreateFromHICON(hIcon);
     }
-    if (!tray_ico.IsOk() || !tray_icon_->SetIcon(tray_ico, wxString::Format("A2DPWB v%s", APP_VERSION))) {
+    if (!tray_ico.IsOk() || !tray_icon_->SetIcon(tray_ico, wxString::Format("SSC On Windows v%s", APP_VERSION))) {
         delete tray_icon_;
         tray_icon_ = nullptr;
     }
@@ -333,12 +333,9 @@ void MainFrame::rebuild_profile_list() {
 
             /* Codec display name */
             const char *codec_str;
-            if      (p.codec == "ldac")   codec_str = "LDAC";
-            else if (p.codec == "aptxhd") codec_str = "aptX HD";
-            else if (p.codec == "aptxll") codec_str = "aptX LL";
-            else if (p.codec == "sbc")    codec_str = "SBC";
+            if      (p.codec == "sbc")    codec_str = "SBC";
             else if (p.codec == "aac")    codec_str = "AAC";
-            else if (p.codec == "auto")   codec_str = L("codec.auto");
+            else if (p.codec == "ssc")    codec_str = "SSC";
             else                          codec_str = p.codec.c_str();
 
             /* Quality display name with bitrate */
@@ -347,11 +344,10 @@ void MainFrame::rebuild_profile_list() {
                                  L("quality.mobile");
             int q_idx = (p.quality == "hq") ? 0 : (p.quality == "sq") ? 1 : 2;
             char quality_buf[64];
-            bool is_441 = (p.sample_rate == 44100 || p.sample_rate == 88200);
-            if (p.codec == "ldac") {
-                static const int rates_48[] = {990, 660, 330};
-                static const int rates_44[] = {909, 606, 303};
-                const int *r = is_441 ? rates_44 : rates_48;
+            if (p.codec == "ssc") {
+                static const int rates_48[] = {229, 192, 128};
+                static const int rates_96[] = {584, 442, 250};
+                const int *r = (p.sample_rate >= 96000) ? rates_96 : rates_48;
                 snprintf(quality_buf, sizeof(quality_buf), "%s(%dkbps)", q_name, r[q_idx]);
             } else if (p.codec == "aac") {
                 static const int rates[] = {256, 192, 128};

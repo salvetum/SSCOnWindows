@@ -13,12 +13,14 @@
 #include <avrt.h>
 #include <timeapi.h>
 #include <functiondiscoverykeys_devpkey.h>
+#include <endpointvolume.h>
 
 /* WASAPI CLSID/IID - defined here to avoid linking issues */
 static const CLSID CLSID_MMDeviceEnumerator_ = __uuidof(MMDeviceEnumerator);
 static const IID IID_IMMDeviceEnumerator_ = __uuidof(IMMDeviceEnumerator);
 static const IID IID_IAudioClient_ = __uuidof(IAudioClient);
 static const IID IID_IAudioCaptureClient_ = __uuidof(IAudioCaptureClient);
+static const IID IID_IAudioEndpointVolume_ = __uuidof(IAudioEndpointVolume);
 
 WasapiCapture::WasapiCapture() {
     stop_event_ = CreateEventW(nullptr, TRUE, FALSE, nullptr);
@@ -34,6 +36,41 @@ WasapiCapture::~WasapiCapture() {
     if (enumerator_) { enumerator_->Release(); enumerator_ = nullptr; }
     if (buffer_event_) { CloseHandle(buffer_event_); buffer_event_ = nullptr; }
     if (stop_event_) { CloseHandle(stop_event_); stop_event_ = nullptr; }
+}
+
+bool WasapiCapture::mute_output(bool mute) {
+    if (!enumerator_) return false;
+
+    /* Get the current default render endpoint (speakers / headphone jack).
+     * Note: loopback capture grabs data pre-volume-mix, so muting the
+     * speaker output via IAudioEndpointVolume does NOT silence the loopback
+     * stream — the headphones keep playing. */
+    IMMDevice *render_dev = nullptr;
+    HRESULT hr = enumerator_->GetDefaultAudioEndpoint(eRender, eConsole, &render_dev);
+    if (FAILED(hr) || !render_dev) {
+        fprintf(stderr, "WasapiCapture: mute_output: no default render endpoint (hr=0x%08lx)\n", hr);
+        return false;
+    }
+
+    IAudioEndpointVolume *vol = nullptr;
+    hr = render_dev->Activate(IID_IAudioEndpointVolume_, CLSCTX_ALL, nullptr,
+                              reinterpret_cast<void **>(&vol));
+    if (FAILED(hr) || !vol) {
+        fprintf(stderr, "WasapiCapture: mute_output: IAudioEndpointVolume activate failed (hr=0x%08lx)\n", hr);
+        render_dev->Release();
+        return false;
+    }
+
+    BOOL bMute = mute ? TRUE : FALSE;
+    hr = vol->SetMute(bMute, nullptr);
+    if (SUCCEEDED(hr))
+        fprintf(stderr, "WasapiCapture: output %s\n", mute ? "MUTED" : "UNMUTED");
+    else
+        fprintf(stderr, "WasapiCapture: SetMute failed (hr=0x%08lx)\n", hr);
+
+    vol->Release();
+    render_dev->Release();
+    return SUCCEEDED(hr);
 }
 
 bool WasapiCapture::init(uint32_t preferred_sample_rate, const wchar_t *device_id) {
@@ -146,17 +183,22 @@ bool WasapiCapture::init(uint32_t preferred_sample_rate, const wchar_t *device_i
 
     sample_rate_ = init_format->nSamplesPerSec;
 
-    fprintf(stderr, "WasapiCapture: Format: %u Hz, %u ch, %u bit (container: %u bit)\n",
-           sample_rate_, channels_, bits_per_sample_, init_format->wBitsPerSample);
+    fprintf(stderr, "WasapiCapture: Format: %u Hz, %u ch, %u bit (container: %u bit) tag=0x%04x\n",
+           sample_rate_, channels_, bits_per_sample_, init_format->wBitsPerSample,
+           mix_format->wFormatTag);
+    if (mix_format->wFormatTag == WAVE_FORMAT_EXTENSIBLE) {
+        WAVEFORMATEXTENSIBLE *ext = reinterpret_cast<WAVEFORMATEXTENSIBLE *>(mix_format);
+        fprintf(stderr, "WasapiCapture: Extensible subtype=%08x-... valid_bits=%u\n",
+                ext->SubFormat.Data1, ext->Samples.wValidBitsPerSample);
+    }
 
-    /* Initialize audio client in loopback mode with event-driven buffering.
-     * Event-driven mode avoids timer-resolution issues (default 15.6ms) that
-     * cause data discontinuity when polling with WaitForSingleObject. */
-    REFERENCE_TIME buf_duration = static_cast<REFERENCE_TIME>(BUFFER_DURATION_MS) * 10000;
+    /* Larger buffer for polling mode (event-driven keeps 10ms default) */
+    REFERENCE_TIME buf_duration = static_cast<REFERENCE_TIME>(
+        (event_mode_ ? BUFFER_DURATION_MS : 40)) * 10000;
 
     hr = audio_client_->Initialize(
         AUDCLNT_SHAREMODE_SHARED,
-        AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
+        AUDCLNT_STREAMFLAGS_LOOPBACK,
         buf_duration,
         0,                  /* periodicity (0 = default for shared mode) */
         init_format,
@@ -164,25 +206,29 @@ bool WasapiCapture::init(uint32_t preferred_sample_rate, const wchar_t *device_i
     );
 
     if (FAILED(hr)) {
-        /* Fallback: some drivers don't support event-driven loopback */
-        fprintf(stderr, "WasapiCapture: Event-driven init failed (0x%08lx), trying polling mode\n", hr);
+        /* Fallback: try event-driven loopback */
+        fprintf(stderr, "WasapiCapture: Polling init failed (0x%08lx), trying event-driven\n", hr);
         hr = audio_client_->Initialize(
             AUDCLNT_SHAREMODE_SHARED,
-            AUDCLNT_STREAMFLAGS_LOOPBACK,
+            AUDCLNT_STREAMFLAGS_LOOPBACK | AUDCLNT_STREAMFLAGS_EVENTCALLBACK,
             buf_duration,
             0,
             init_format,
             nullptr
         );
-    } else {
-        /* Set the event handle for event-driven mode */
-        hr = audio_client_->SetEventHandle(buffer_event_);
-        if (FAILED(hr)) {
-            fprintf(stderr, "WasapiCapture: SetEventHandle failed: 0x%08lx\n", hr);
-            CoTaskMemFree(mix_format);
-            return false;
+        if (SUCCEEDED(hr)) {
+            /* Set the event handle for event-driven mode */
+            HRESULT eh = audio_client_->SetEventHandle(buffer_event_);
+            if (SUCCEEDED(eh)) {
+                event_mode_ = true;
+                fprintf(stderr, "WasapiCapture: Using event-driven capture\n");
+            } else {
+                fprintf(stderr, "WasapiCapture: SetEventHandle failed: 0x%08lx\n", eh);
+            }
         }
-        fprintf(stderr, "WasapiCapture: Using event-driven capture\n");
+    } else {
+        event_mode_ = false;
+        fprintf(stderr, "WasapiCapture: Using polling capture\n");
     }
 
     CoTaskMemFree(mix_format);
@@ -285,7 +331,7 @@ void WasapiCapture::capture_loop() {
 
     /* Wait on buffer_event (event-driven) + stop_event, or poll as fallback */
     HANDLE wait_handles[2] = { stop_event_, buffer_event_ };
-    int handle_count = buffer_event_ ? 2 : 1;
+    int handle_count = event_mode_ ? 2 : 1;
 
     while (running_.load()) {
         DWORD wait_result;
@@ -333,6 +379,34 @@ void WasapiCapture::capture_loop() {
                     fprintf(stderr, "WasapiCapture: Data discontinuity (count=%u)\n", disc_count);
                     disc_tick = now;
                 }
+            }
+
+            static uint64_t last_device_pos = 0;
+            static uint64_t last_qpc_pos = 0;
+            static DWORD last_clock_tick = 0;
+            static uint64_t dbg_silent_frames = 0;
+            static uint64_t dbg_total_frames = 0;
+            dbg_total_frames += num_frames;
+            if (flags & AUDCLNT_BUFFERFLAGS_SILENT) {
+                dbg_silent_frames += num_frames;
+            }
+            DWORD now = GetTickCount();
+            if (now - last_clock_tick >= 2000) {
+                double dev_hz = 0.0;
+                double dur_ms = (double)(now - last_clock_tick);
+                if (last_clock_tick != 0 && dur_ms > 0 && (uint64_t)device_position >= last_device_pos) {
+                    dev_hz = (double)(device_position - last_device_pos) * 1000.0 / dur_ms;
+                }
+                double silent_pct = dbg_total_frames
+                    ? (100.0 * (double)dbg_silent_frames / (double)dbg_total_frames) : 0.0;
+                fprintf(stderr, "WasapiCapture: CLK dev=%llu qpc=%llu dev_hz=%.0f silent=%.1f%% frames=%llu\n",
+                        (unsigned long long)device_position, (unsigned long long)qpc_position,
+                        dev_hz, silent_pct, (unsigned long long)dbg_total_frames);
+                last_device_pos = device_position;
+                last_qpc_pos = qpc_position;
+                last_clock_tick = now;
+                dbg_silent_frames = 0;
+                dbg_total_frames = 0;
             }
 
             if (num_frames > 0 && callback_) {

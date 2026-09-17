@@ -1,4 +1,4 @@
----
+﻿---
 title: 使い方
 layout: default
 parent: 日本語
@@ -19,19 +19,20 @@ nav_order: 2
 ## GUI モード（既定）
 
 ```
-A2DPWB.exe
+SSCOnWindows.exe
 ```
 
-グラフィカルインターフェースでは以下の操作が可能です:
+WinUI 3 インターフェースでは以下の操作が可能です:
 
-- **Bluetooth アダプター選択** -- 使用する WinUSB アダプターを選択
-- **オーディオデバイス選択** -- WASAPI ループバックキャプチャのソースを選択
-- **デバイスアドレス** -- 手動入力またはペアリング済みデバイスから選択
-- **コーデック選択** -- Auto / LDAC / aptX HD / aptX LL / AAC / SBC
-- **LDAC 品質** -- HQ (990 kbps) / SQ (660 kbps) / MQ (330 kbps)
-- **LDAC ABR** -- 不安定な接続時のアダプティブビットレート切替
-- **プロファイル管理** -- デバイス + コーデック設定の保存・読み込み
-- **リアルタイムステータス** -- コーデック、ビットレート、接続状態
+- **スキャン / 接続 / ダイレクト接続** -- ヘッドホンの検出と接続
+- **コーデック選択** -- SSC（既定）/ AAC / SBC
+- **品質** -- High / Standard / Mobile
+- **サンプルレート** -- 48 kHz、または 96 kHz（SSC UHQ、UHQ 対応シンクのみ）
+- **ビットレート** -- 自動または明示指定（アクティブモードの有効なセットにスナップ）
+- **デバイス音量** -- AVRCP 絶対ボリューム (0-100%)
+- **Streaming Mode (Dongle)** -- ドングルを WinUSB と Windows Bluetooth の間で切替
+- **ライブ統計** -- レイテンシー、エラー率、ロス、キューの深さ + スパークライン
+- **Setup & Help** -- 初回ペアリングガイドと FAQ
 
 ## CLI モード
 
@@ -40,43 +41,55 @@ A2DPWB.exe
 ### 基本
 
 ```bash
-# 最適なコーデックを自動選択
-A2DPWB.exe --cli -d AA:BB:CC:DD:EE:FF
+# SSC（既定）
+SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF
 ```
 
-### コーデック選択
+### コーデックと品質
 
 ```bash
-A2DPWB.exe --cli -d AA:BB:CC:DD:EE:FF -c ldac      # LDAC
-A2DPWB.exe --cli -d AA:BB:CC:DD:EE:FF -c aptxhd    # aptX HD
-A2DPWB.exe --cli -d AA:BB:CC:DD:EE:FF -c aptxll    # aptX Low Latency
-A2DPWB.exe --cli -d AA:BB:CC:DD:EE:FF -c aac       # AAC
-A2DPWB.exe --cli -d AA:BB:CC:DD:EE:FF -c sbc       # SBC
+SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc       # SSC
+SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c aac       # AAC
+SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c sbc       # SBC
+
+SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc -q hq   # 229 kbps（48k、既定）
+SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc -q std  # 192 kbps
+SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc -q mq   # 128 kbps
 ```
 
-自動選択の優先順位: LDAC > aptX HD > aptX LL > AAC > SBC
+要求したコーデックが利用できない場合のフォールバック優先度: **SSC > AAC > SBC**。
 
-### LDAC 品質
+### SSC UHQ（96 kHz）
+
+UHQ は 48 kHz キャプチャに 2x SRC を適用し、96 kHz のビットレートセットを使用します。UHQ ケーパビリティビットをアドバタイズするシンクでのみ使用可能で、それ以外の場合はアプリが 48 kHz にフォールバックします。
 
 ```bash
-A2DPWB.exe --cli -d AA:BB:CC:DD:EE:FF -c ldac -q hq   # 990 kbps（既定）
-A2DPWB.exe --cli -d AA:BB:CC:DD:EE:FF -c ldac -q sq   # 660 kbps
-A2DPWB.exe --cli -d AA:BB:CC:DD:EE:FF -c ldac -q mq   # 330 kbps
+SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --uhq        # 584 kbps（既定）
+SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --uhq -q std # 442 kbps
+SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --uhq -q mq  # 250 kbps
 ```
 
-### LDAC ABR（アダプティブビットレート）
+### ビットレートを明示指定
 
 ```bash
-A2DPWB.exe --cli -d AA:BB:CC:DD:EE:FF -c ldac -a
+SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --bitrate 192
 ```
 
-ABR は Bluetooth 接続が不安定な場合にビットレートを自動的に下げ、安定すると引き上げます。
+アクティブモードの有効セット外の値は自動的にスナップされます（サポート外のビットレートをバイナリに渡すと音声が乱れます）。
+
+### ネイティブ SSC デーモン（試験的）
+
+```bash
+SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --ssc-native
+```
+
+WSL2 の代わりに、aarch64 SSC バイナリを Windows 上の Qiling（`py -3.14`）で実行します。WSL2 は不要ですが遅く、UHQ では WSL2 を推奨します。
 
 ### デバイス検出
 
 ```bash
 # ペアリング済みの Bluetooth オーディオデバイスを一覧表示
-A2DPWB.exe --cli -l
+SSCOnWindows-0.1.exe --cli -l
 ```
 
 {: .note }
@@ -84,7 +97,7 @@ A2DPWB.exe --cli -l
 
 ## キャプチャモード
 
-A2DPWB は 2 つのオーディオキャプチャモードに対応しています:
+次の 2 つのオーディオキャプチャモードに対応しています:
 
 | モード | 説明 |
 |:-------|:-----|
@@ -92,15 +105,18 @@ A2DPWB は 2 つのオーディオキャプチャモードに対応していま�
 | 仮想デバイス | 特定の仮想オーディオデバイス（VB-CABLE 等）からキャプチャ（アプリ単位のルーティングに使用） |
 
 {: .warning }
-どちらのモードも WASAPI 共有モードを使用するため、キャプチャのサンプルレートは Windows サウンド設定の「既定の形式」に依存します（通常 48 kHz）。LDAC の 96 kHz を利用するには、**サウンド設定 → デバイスのプロパティ → 詳細 → 既定の形式**で出力デバイスのサンプルレートを 96 kHz に変更してください。
+どちらのモードも WASAPI 共有モードを使用するため、キャプチャのサンプルレートは Windows サウンド設定のデバイスの**「既定の形式」**に依存します（通常 48 kHz）。SSC UHQ は Windows のキャプチャレートを変更せず、48 kHz キャプチャに 2x SRC を適用します。
+
+## 音量
+
+音量スライダーは AVRCP 絶対ボリュームで**ヘッドホンの**音量を制御します（0-100% を 0-127 にマッピング）。WASAPI ループバックはボリュームミックス前の音声をキャプチャするため、Windows の出力音量はキャプチャレベルに影響しません。自動ミュートを有効にすると、ストリーミング中は既定のスピーカーがミュートされます。
 
 ## コーデック比較
 
 | コーデック | 最適な用途 | トレードオフ |
 |:-----------|:-----------|:-------------|
-| LDAC (HQ) | 最高音質 | レイテンシーが高い、安定した接続が必要 |
-| LDAC (ABR) | 音質 + 安定性 | 接続状況に応じてビットレートが変動 |
-| aptX HD | 高音質、幅広いデバイス対応 | 固定 576 kbps |
-| aptX LL | ゲーム、動画（低レイテンシー） | 音質が低い (16-bit) |
-| AAC | Apple デバイス、良い効率 | 中程度の音質 |
+| SSC (High) | Samsung デバイスで最高の音質と堅牢性 | SSC バイナリデーモンが必要 |
+| SSC (Mobile) | RF が混雑した環境 | 低ビットレート |
+| SSC UHQ | UHQ 対応シンクでの最高音質 | WSL2 が必要。UHQ シンクが必要 |
+| AAC | 汎用フォールバック | 中程度の音質 |
 | SBC | 最大の互換性 | 最低の音質 |

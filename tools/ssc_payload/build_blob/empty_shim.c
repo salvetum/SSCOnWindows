@@ -1,0 +1,1 @@
+int ssc_empty_android_dependency_shim;
