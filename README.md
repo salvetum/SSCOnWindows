@@ -207,8 +207,8 @@ This project builds on the work of many others. Upstream code and libraries:
 | **A2DP Windows Bridge** (this project's upstream) | [SeiyaFunaokaJP/A2DP-Windows-Bridge](https://github.com/SeiyaFunaokaJP/A2DP-Windows-Bridge) | MIT |
 | **SSC On Windows** (this fork) | Salvetum | MIT |
 | **BTstack** — user-mode Bluetooth stack | [bluekitchen/btstack](https://github.com/bluekitchen/btstack) | BSD-3-Clause (dual; commercial license from BlueKitchen GmbH) |
-| **SSC codec integration reference** — A2DP SSC codec definitions (capabilities, bitrate/mode rules) | [sachk/openssc](https://github.com/sachk/openssc) | see upstream |
-| **Samsung `libScalable_Encoder.so`** — the actual SSC encoder blob | Samsung (distributed via the SSC/openssc ecosystem) | proprietary; not included in this repository |
+| **SSC codec integration reference** — A2DP SSC codec definitions (capabilities, bitrate/mode rules) | [sachk/openssc](https://github.com/sachk/openssc) | no license file (all rights reserved); used as an interoperability reference only |
+| **Samsung `libScalable_Encoder.so`** — the actual SSC encoder blob | Samsung (extracted from a Samsung Galaxy device) | proprietary; **included in this repository** under `tools/ssc_payload/blob/` and `tools/ssc_daemon/rootfs/blob/`. Not covered by the MIT license; redistribution may be restricted. |
 | **Qiling** — aarch64 user-mode emulation for the native daemon | [qilingframework/qiling](https://github.com/qilingframework/qiling) | GPL-2.0 |
 | **Fraunhofer FDK AAC** | [mstorsjo/fdk-aac](https://github.com/mstorsjo/fdk-aac) | FDK AAC License (non-commercial) |
 | **wxWidgets** — legacy GUI | [wxWidgets/wxWidgets](https://github.com/wxWidgets/wxWidgets) | wxWindows Library Licence (LGPL-2.0 + exception) |
@@ -216,6 +216,7 @@ This project builds on the work of many others. Upstream code and libraries:
 | **Windows App SDK** — WinUI 3 runtime | Microsoft | Microsoft EULA |
 
 - Project license: **MIT** — see [LICENSE](LICENSE).
+- **The Samsung SSC blob is proprietary** and is bundled in this repository (`tools/.../blob/`); it is **not** covered by the MIT license. It is used for interoperability and may not be legally redistributable in every jurisdiction — see [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 - Full third-party notices: [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 - Local modifications to submodules are kept as patches under `patches/`.
 
