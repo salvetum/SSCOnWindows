@@ -17,9 +17,20 @@
 #    .\setup.ps1 -Smoke                 # ... then run golden regression
 #    .\setup.ps1 -Distro Ubuntu         # target a specific WSL distro
 #    .\setup.ps1 -SkipCompile           # deploy/paths only (no gcc)
-#    .\setup.ps1 -SkipApt               # never propose apt installs
+#    .\setup.ps1 -SkipApt                 # never propose apt installs
 #    .\setup.ps1 -ForceWslConfig        # overwrite .wslconfig (backup kept)
 #    .\setup.ps1 -Quiet                 # minimal output
+#    .\setup.ps1 -BlobFrom C:\blob\libScalable_Encoder.so    # use YOUR OWN
+#                -BlobFrom C:\firmware\   # blob legally extracted from a device
+#                                          # you own (ELF aarch64, validated);
+#                                          # otherwise the vendored copy is used
+#
+#  Legal blob note: the repository currently vendors a proprietary Samsung
+#  encoder blob. Prefer providing your own copy extracted from a Galaxy device
+#  you own (e.g. from its system/vendor firmware image - exactly the reference
+#  methodology used by sachk/openssc: locate libScalable_Encoder.so in
+#  vendor/lib64 or the extracted com.android.bt image). Do NOT download blobs
+#  from third parties.
 #
 #  Encoding note: wsl -l* prints UTF-16LE to files/blocks while `bash -lc`
 #  output is UTF-8 (no BOM). We therefore write each bash script to a temp
@@ -32,6 +43,7 @@ param(
     [switch]$Smoke,
     [switch]$ForceWslConfig,
     [switch]$Quiet,
+    [string]$BlobFrom = '',
     [string]$Repo = 'C:\Projects\SSCOnWindows'
 )
 
@@ -123,18 +135,44 @@ $wslRepo = ConvertTo-WslPath $Repo
 Log "Payload source (WSL view): $wslRepo/tools/ssc_payload"
 
 # ------------------------------------------------------------ 1. WSL deploy
-Log "==> Deploying vendored SSC payload into ~/ssc ..."
+# Resolve which blob to deploy: the vendored copy, or the user's own -BlobFrom.
+$blobSrc = Join-Path $PayloadDir 'blob'
+if ($BlobFrom) {
+    if (Test-Path $BlobFrom -PathType Container) {
+        $blobFile = Get-ChildItem $BlobFrom -Recurse -Filter 'libScalable_Encoder.so' -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if (-not $blobFile) { Die "No 'libScalable_Encoder.so' found inside: $BlobFrom" }
+        $BlobFrom = $blobFile.FullName
+    }
+    if (-not (Test-Path $BlobFrom -PathType Leaf)) {
+        Die "Blob not found: $BlobFrom (give a .so file, or a folder containing libScalable_Encoder.so)"
+    }
+    $magic = New-Object byte[] 4
+    $fs = [System.IO.File]::OpenRead($BlobFrom)
+    try { [void]$fs.Read($magic, 0, 4) } finally { $fs.Dispose() }
+    if ($magic[0] -ne 0x7F -or $magic[1] -ne 0x45 -or $magic[2] -ne 0x4C -or $magic[3] -ne 0x46) {
+        Die "Not an ELF binary: $BlobFrom"
+    }
+    $blobSrc = $BlobFrom
+    Log "Using user-provided blob: $BlobFrom"
+} else {
+    Log "Using vendored blob: $blobSrc (tip: -BlobFrom <your own extracted copy>)"
+}
+$blobWsl = ConvertTo-WslPath $blobSrc
+
+Log "==> Deploying SSC payload into ~/ssc ..."
 $deployScript = @'
 #!/bin/sh
 set -e
 mkdir -p "$HOME/ssc/blob" "$HOME/ssc/bin" "$HOME/ssc/work" "$HOME/ssc/openssc/build_blob"
 SRC="{{WSL_REPO}}/tools/ssc_payload"
-cp "$SRC/blob/"* "$HOME/ssc/blob/"
+BLB="{{BLOB_WSL}}"
+if [ -d "$BLB" ]; then cp "$BLB/"* "$HOME/ssc/blob/"; else cp "$BLB" "$HOME/ssc/blob/libScalable_Encoder.so"; fi
 cp "$SRC/bin/"* "$HOME/ssc/bin/"
 cp "$SRC/build_blob/"* "$HOME/ssc/openssc/build_blob/"
 chmod +x "$HOME/ssc/bin/start_sscblobd" "$HOME/ssc/openssc/build_blob/ssc_blob_helper"
 echo DEPLOYED
-'@ -replace '\{\{WSL_REPO\}\}', $wslRepo
+'@ -replace '\{\{WSL_REPO\}\}', $wslRepo -replace '\{\{BLOB_WSL\}\}', $blobWsl
 
 $deployOut = Invoke-WslScript $Distro $deployScript
 if (($LASTEXITCODE -ne 0) -or ($deployOut -notmatch 'DEPLOYED')) {

@@ -74,6 +74,15 @@ Desktop.ini
 *.fw
 *.bin
 
+# Proprietary blob / binary artifacts - must never be committed
+# (pre-commit hook tools/check_proprietary.py enforces the same rules)
+*.so
+libScalable_Encoder*
+libScalable_Decoder*
+lib_bt_bundle*
+rtl8761*
+rtl8763*
+
 # Package / distribution
 *.zip
 *.7z

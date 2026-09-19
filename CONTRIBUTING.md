@@ -55,6 +55,29 @@ git -C extern/btstack apply ..\..\patches\btstack-win-usb-logs.patch
 4. Commit your changes (`git commit -m "Add my feature"`)
 5. Push and open a pull request
 
+## Proprietary binaries
+
+Do **not** add proprietary or downloaded binaries to this repository:
+
+- Samsung SSC blobs (`libScalable_Encoder.so`, `libScalable_Decoder.so`,
+  `lib_bt_bundle.so`)
+- any `*.so`, `*.fw`, `*.bin`, `*.psr` binary artifact
+- Realtek / CSR dongle firmware (`rtl8761*`, `rtl8763*`, `csr*`)
+
+The repo currently tracks a proprietary Samsung encoder blob for the interim
+release; it is scheduled for removal. Do **not** update, re-add, or commit new
+copies of it. `tools/check_proprietary.py` rejects such additions:
+- via the pre-commit hook (install it once locally):
+  ```powershell
+  git config core.hooksPath tools/githooks
+  ```
+- and in CI on PRs.
+
+Deletions are always allowed, so removing the bundled blob later is fine. See
+[`docs/dev/audit-2026.md`](docs/dev/audit-2026.md) for the full license / blob
+inventory. If a proprietary file slips in, open an issue rather than silently
+removing history.
+
 ## License
 
 Contributions are provided under the [MIT License](LICENSE).

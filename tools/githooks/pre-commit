@@ -1,0 +1,24 @@
+#!/bin/sh
+# pre-commit hook: reject proprietary binary artifacts in staged changes.
+# Installed via:  git config core.hooksPath tools/githooks
+# See tools/check_proprietary.py for the rule list.
+
+root=$(git rev-parse --show-toplevel) || exit 1
+checker="$root/tools/check_proprietary.py"
+
+# Only run if the checker script exists (e.g. during the commit that adds it).
+[ -f "$checker" ] || exit 0
+
+if command -v python3 >/dev/null 2>&1; then
+    PY=python3
+elif command -v python >/dev/null 2>&1; then
+    PY=python
+else
+    PY=py
+fi
+
+"$PY" "$checker" check-staged || {
+    echo "pre-commit: rejected proprietary artifact above (see tools/check_proprietary.py; deletions are allowed)." >&2
+    exit 1
+}
+exit 0
