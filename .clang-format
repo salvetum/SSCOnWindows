@@ -1,0 +1,20 @@
+---
+# Clang-format style for SSC On Windows (app/src core)
+# Matches the existing code: 4-space indent, K&R braces, pointers on the right,
+# short single-line if/for. ColumnLimit=0 avoids aggressive reflow churn.
+BasedOnStyle: LLVM
+IndentWidth: 4
+ContinuationIndentWidth: 4
+UseTab: Never
+ColumnLimit: 0
+Standard: c++17
+PointerAlignment: Right
+DerivePointerAlignment: false
+AccessModifierOffset: -4
+BreakBeforeBraces: Attach
+AllowShortIfStatementsOnASingleLine: true
+AllowShortLoopsOnASingleLine: true
+AllowShortBlocksOnASingleLine: true
+AllowShortFunctionsOnASingleLine: Empty
+SortIncludes: false
+IncludeBlocks: Preserve

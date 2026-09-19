@@ -143,8 +143,8 @@
     <MultiProcMIDL>true</MultiProcMIDL>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <Import Project="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.winui\1.8.260803003\buildTransitive\Microsoft.UI.Xaml.Markup.Compiler.interop.targets" />
-  <Import Project="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.winui\1.8.260803003\buildTransitive\native\Microsoft.WinUI.References.targets" />
+  <Import Project="$(NuGetPackageRoot)microsoft.windowsappsdk.winui\1.8.260803003\buildTransitive\Microsoft.UI.Xaml.Markup.Compiler.interop.targets" />
+  <Import Project="$(NuGetPackageRoot)microsoft.windowsappsdk.winui\1.8.260803003\buildTransitive\native\Microsoft.WinUI.References.targets" />
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.CppWinRT" Version="3.0.260818.1" />
     <PackageReference Include="Microsoft.Windows.ImplementationLibrary" Version="1.0.260126.7" />
@@ -186,23 +186,23 @@
   -->
   <Target Name="GetWinUIMetadataReferences">
     <ItemGroup>
-      <ReferencePath Include="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.winui\1.8.260803003\metadata\Microsoft.UI.Xaml.winmd">
+      <ReferencePath Include="$(NuGetPackageRoot)microsoft.windowsappsdk.winui\1.8.260803003\metadata\Microsoft.UI.Xaml.winmd">
         <WinMDFile>true</WinMDFile>
         <CopyLocal>false</CopyLocal>
       </ReferencePath>
-      <ReferencePath Include="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.winui\1.8.260803003\metadata\Microsoft.UI.Text.winmd">
+      <ReferencePath Include="$(NuGetPackageRoot)microsoft.windowsappsdk.winui\1.8.260803003\metadata\Microsoft.UI.Text.winmd">
         <WinMDFile>true</WinMDFile>
         <CopyLocal>false</CopyLocal>
       </ReferencePath>
-      <ReferencePath Include="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.interactiveexperiences\1.8.260708001\metadata\10.0.17763.0\Microsoft.UI.winmd">
+      <ReferencePath Include="$(NuGetPackageRoot)microsoft.windowsappsdk.interactiveexperiences\1.8.260708001\metadata\10.0.17763.0\Microsoft.UI.winmd">
         <WinMDFile>true</WinMDFile>
         <CopyLocal>false</CopyLocal>
       </ReferencePath>
-      <ReferencePath Include="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.interactiveexperiences\1.8.260708001\metadata\10.0.17763.0\Microsoft.Foundation.winmd">
+      <ReferencePath Include="$(NuGetPackageRoot)microsoft.windowsappsdk.interactiveexperiences\1.8.260708001\metadata\10.0.17763.0\Microsoft.Foundation.winmd">
         <WinMDFile>true</WinMDFile>
         <CopyLocal>false</CopyLocal>
       </ReferencePath>
-      <ReferencePath Include="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.interactiveexperiences\1.8.260708001\metadata\10.0.17763.0\Microsoft.Graphics.winmd">
+      <ReferencePath Include="$(NuGetPackageRoot)microsoft.windowsappsdk.interactiveexperiences\1.8.260708001\metadata\10.0.17763.0\Microsoft.Graphics.winmd">
         <WinMDFile>true</WinMDFile>
         <CopyLocal>false</CopyLocal>
       </ReferencePath>
@@ -214,11 +214,11 @@
         <WinMDFile>true</WinMDFile>
         <CopyLocal>false</CopyLocal>
       </ReferencePath>
-      <XamlReferencesToCompile Include="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.winui\1.8.260803003\metadata\Microsoft.UI.Xaml.winmd" />
-      <XamlReferencesToCompile Include="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.winui\1.8.260803003\metadata\Microsoft.UI.Text.winmd" />
-      <XamlReferencesToCompile Include="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.interactiveexperiences\1.8.260708001\metadata\10.0.17763.0\Microsoft.UI.winmd" />
-      <XamlReferencesToCompile Include="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.interactiveexperiences\1.8.260708001\metadata\10.0.17763.0\Microsoft.Foundation.winmd" />
-      <XamlReferencesToCompile Include="C:\Users\kaan5\.nuget\packages\microsoft.windowsappsdk.interactiveexperiences\1.8.260708001\metadata\10.0.17763.0\Microsoft.Graphics.winmd" />
+      <XamlReferencesToCompile Include="$(NuGetPackageRoot)microsoft.windowsappsdk.winui\1.8.260803003\metadata\Microsoft.UI.Xaml.winmd" />
+      <XamlReferencesToCompile Include="$(NuGetPackageRoot)microsoft.windowsappsdk.winui\1.8.260803003\metadata\Microsoft.UI.Text.winmd" />
+      <XamlReferencesToCompile Include="$(NuGetPackageRoot)microsoft.windowsappsdk.interactiveexperiences\1.8.260708001\metadata\10.0.17763.0\Microsoft.UI.winmd" />
+      <XamlReferencesToCompile Include="$(NuGetPackageRoot)microsoft.windowsappsdk.interactiveexperiences\1.8.260708001\metadata\10.0.17763.0\Microsoft.Foundation.winmd" />
+      <XamlReferencesToCompile Include="$(NuGetPackageRoot)microsoft.windowsappsdk.interactiveexperiences\1.8.260708001\metadata\10.0.17763.0\Microsoft.Graphics.winmd" />
       <XamlReferencesToCompile Include="C:\Program Files (x86)\Windows Kits\10\UnionMetadata\10.0.26100.0\Windows.winmd" />
     </ItemGroup>
   </Target>

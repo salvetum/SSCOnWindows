@@ -1,0 +1,100 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene:
+    name: Proprietary-artifact check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Collect changed non-deletion paths
+        shell: bash
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            git ls-tree -r --name-only HEAD > files.txt
+          else
+            git diff --name-only --no-renames --diff-filter=ACMRT "$base" HEAD -- . > files.txt
+          fi
+      - name: Run proprietary check (tools/check_proprietary.py)
+        shell: bash
+        run: |
+          readarray -t files < files.txt
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "no changed paths"
+            exit 0
+          fi
+          python tools/check_proprietary.py check-path "${files[@]}"
+
+  build-core:
+    name: core (${{ matrix.config }})
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Apply btstack logging patch (cosmetic; optional)
+        shell: bash
+        run: |
+          git -C extern/btstack apply ../../patches/btstack-win-usb-logs.patch 2>/dev/null || echo "patch skipped (already applied / incompatible)"
+      - name: Configure CMake
+        shell: pwsh
+        run: cmake -S . -B build_msvc -A x64 "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+      - name: Build a2dpwb_core
+        shell: pwsh
+        run: cmake --build build_msvc --config ${{ matrix.config }} --target a2dpwb_core -j 2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: a2dpwb_core-${{ matrix.config }}
+          path: build_msvc/app/${{ matrix.config }}/a2dpwb_core.lib
+          if-no-files-found: error
+
+  build-winui:
+    name: WinUI 3 GUI (${{ matrix.config }})
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Apply btstack logging patch (cosmetic; optional)
+        shell: bash
+        run: |
+          git -C extern/btstack apply ../../patches/btstack-win-usb-logs.patch 2>/dev/null || echo "patch skipped (already applied / incompatible)"
+      - name: Configure CMake
+        shell: pwsh
+        run: cmake -S . -B build_msvc -A x64 "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
+      - name: Build a2dpwb_core (pulls btstack/sbc_codec/fdk-aac dep targets)
+        shell: pwsh
+        run: cmake --build build_msvc --config ${{ matrix.config }} --target a2dpwb_core -j 2
+      - uses: microsoft/setup-msbuild@v2
+      - name: Build WinUI 3 GUI
+        shell: pwsh
+        run: |
+          msbuild "winui3\A2DPWBWinUI.vcxproj" -p:Configuration=${{ matrix.config }} -p:Platform=x64 -p:PlatformToolset=v143 -m:2
+      - name: Upload WinUI payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: SSCOnWindows-winui-${{ matrix.config }}
+          path: winui3/bin/x64/${{ matrix.config }}/
+          if-no-files-found: error

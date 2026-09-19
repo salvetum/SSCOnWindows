@@ -13,6 +13,9 @@ Usage:
   python ssc_golden.py gen  --bitrate 229000 --frames 16 --out 229k.golden
   python ssc_golden.py check --golden 229k.golden
   python ssc_golden.py check --all
+
+Native (no WSL2) mode: add --native to gen/check; the Windows Qiling daemon
+(tools/ssc_daemon/sscblobd.py) is spawned locally and contacted on 127.0.0.1.
 """
 
 import argparse
@@ -23,6 +26,8 @@ import socket
 import struct
 import subprocess
 import sys
+import time
+from pathlib import Path
 
 FRAME_SAMPLES = 864
 CHANNELS = 2
@@ -33,6 +38,9 @@ PCM_SCALE = 1 << 29
 MAGIC = b"SSCG"
 VERSION = 1
 DEFAULT_SEED = 0x5A5C_2026
+
+native_mode = False
+daemon_proc = None
 
 
 def wsl_cmd():
@@ -58,8 +66,63 @@ def wsl_ip():
     return toks[0]
 
 
+def daemon_host():
+    if native_mode:
+        return "127.0.0.1"
+    return wsl_ip()
+
+
+def native_daemon_script():
+    env = os.environ.get("SSC_DAEMON_PY")
+    if env:
+        return env
+    return str(Path(__file__).resolve().parents[1] / "ssc_daemon" / "sscblobd.py")
+
+
+def spawn_native_daemon(bitrate, rate, ch):
+    """(Re)start the Windows-native Qiling daemon (tools/ssc_daemon/sscblobd.py)."""
+    global daemon_proc
+    if daemon_proc is not None:
+        daemon_proc.terminate()
+        try:
+            daemon_proc.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            daemon_proc.kill()
+            daemon_proc.wait()
+        daemon_proc = None
+    script = native_daemon_script()
+    if not os.path.isfile(script):
+        print(f"native daemon script not found: {script}", file=sys.stderr)
+        sys.exit(1)
+    creationflags = 0
+    if os.name == "nt":
+        creationflags = subprocess.CREATE_NO_WINDOW
+    daemon_proc = subprocess.Popen(
+        [sys.executable, "-u", script, str(DAEMON_PORT),
+         str(rate), str(ch), str(bitrate)],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        creationflags=creationflags,
+    )
+    deadline = time.time() + 90
+    while time.time() < deadline:
+        if daemon_proc.poll() is not None:
+            print("native daemon exited during startup", file=sys.stderr)
+            sys.exit(1)
+        try:
+            with socket.create_connection(("127.0.0.1", DAEMON_PORT), timeout=1):
+                return
+        except OSError:
+            time.sleep(0.5)
+    print("native daemon did not start (Qiling installed? rootfs/blob present?)",
+          file=sys.stderr)
+    sys.exit(1)
+
+
 def restart_daemon(bitrate, rate=RATE, ch=CHANNELS):
     """Kill + restart sscblobd with the given codec config."""
+    if native_mode:
+        spawn_native_daemon(bitrate, rate, ch)
+        return
     script = os.environ.get(
         "SSC_DAEMON_SCRIPT", "/home/kaan5/ssc/bin/start_sscblobd")
     res = subprocess.run(
@@ -76,7 +139,7 @@ def connect():
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     s.settimeout(10.0)
-    s.connect((wsl_ip(), DAEMON_PORT))
+    s.connect((daemon_host(), DAEMON_PORT))
     return s
 
 
@@ -191,14 +254,24 @@ def main():
     c.add_argument("--golden", default=None)
     c.add_argument("--all", action="store_true", help="check every *.golden here")
 
+    for p in (g, c):
+        p.add_argument("--native", action="store_true",
+                       help="use the Windows-native Qiling daemon (no WSL2)")
+
     args = ap.parse_args()
+
+    global native_mode
+    native_mode = getattr(args, "native", False)
 
     if args.cmd == "gen":
         gen_golden(args.bitrate, args.frames, args.out, args.seed, args.rate)
+        rc = 0
     else:
         if args.all:
             here = os.path.dirname(os.path.abspath(__file__))
-            paths = sorted(p for p in os.listdir(here) if p.endswith(".golden"))
+            paths = sorted(
+                os.path.join(here, p) for p in os.listdir(here)
+                if p.endswith(".golden"))
             if not paths:
                 print("no *.golden files found here", file=sys.stderr)
                 sys.exit(1)
@@ -210,7 +283,11 @@ def main():
         ok = True
         for p in paths:
             ok &= check_golden(p)
-        sys.exit(0 if ok else 1)
+        rc = 0 if ok else 1
+
+    if native_mode and daemon_proc is not None and daemon_proc.poll() is None:
+        daemon_proc.terminate()
+    sys.exit(rc)
 
 
 if __name__ == "__main__":

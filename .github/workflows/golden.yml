@@ -1,0 +1,46 @@
+name: golden
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/golden/**'
+      - 'tools/ssc_daemon/**'
+      - 'tools/ssc_payload/**'
+      - 'app/src/ssc_encoder.*'
+
+permissions:
+  contents: read
+
+jobs:
+  golden-native:
+    name: SSC golden regression (native Qiling daemon)
+    runs-on: windows-2022
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.14']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install Qiling (aarch64 user-mode emulation)
+        shell: pwsh
+        run: python -m pip install --quiet qiling
+      - name: Skip-with-warning when the proprietary blob is absent
+        shell: pwsh
+        run: |
+          $blob = 'tools/ssc_daemon/rootfs/blob/libScalable_Encoder.so'
+          if (Test-Path $blob) {
+            Write-Output "blob present: $blob - running real golden regression"
+          } else {
+            Write-Output "::warning::proprietary SSC blob not present; skipping golden (expected on OSS-only runners)"
+            exit 0
+          }
+      - name: Run golden check (all profiles, native daemon)
+        shell: pwsh
+        run: python tools/golden/ssc_golden.py check --all --native
