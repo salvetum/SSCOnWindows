@@ -13,18 +13,17 @@
 #   8. Optional -Smoke: runs the SSC golden-file check (229k) end-to-end.
 #
 #  Usage:
-#    .\setup.ps1                        # deploy + compile + verify
-#    .\setup.ps1 -Smoke                 # ... then run golden regression
+#    .\setup.ps1                        # one-shot: preflight -> deploy -> compile -> verify (idempotent)
+#    .\setup.ps1 -BlobFrom <path|dir>   # use YOUR OWN legally-obtained blob (ELF-validated; recommended)
 #    .\setup.ps1 -Distro Ubuntu         # target a specific WSL distro
 #    .\setup.ps1 -SkipCompile           # deploy/paths only (no gcc)
-#    .\setup.ps1 -SkipApt                 # never propose apt installs
+#    .\setup.ps1 -SkipApt               # never propose apt installs
 #    .\setup.ps1 -ForceWslConfig        # overwrite .wslconfig (backup kept)
+#    .\setup.ps1 -Smoke                 # after setup: run the golden regression (needs blob + python)
 #    .\setup.ps1 -Quiet                 # minimal output
-#    .\setup.ps1 -BlobFrom C:\blob\libScalable_Encoder.so    # use YOUR OWN
-#                -BlobFrom C:\firmware\   # blob legally extracted from a device
-#                                          # you own (ELF aarch64, validated);
-#                                          # otherwise the vendored copy is used
 #
+#  Every stage is numbered (=== N. title ===) and re-runnable: re-running the
+#  script is safe (deploys are idempotent, .wslconfig is merged, not clobbered).
 #  Legal blob note: the repository currently vendors a proprietary Samsung
 #  encoder blob. Prefer providing your own copy extracted from a Galaxy device
 #  you own (e.g. from its system/vendor firmware image - exactly the reference
@@ -52,7 +51,16 @@ $PayloadDir = Join-Path $Repo 'tools\ssc_payload'
 $WslConfigPath = Join-Path $env:USERPROFILE '.wslconfig'
 
 function Log  { if (-not $Quiet) { Write-Host $args } }
-function Die  { Write-Error $args[0]; exit 1 }
+function Die  { param([string]$Msg, [string]$Tip = '')
+    Write-Host "ERROR: $Msg" -ForegroundColor Red
+    if ($Tip) { Write-Host "  Fix: $Tip" -ForegroundColor Yellow }
+    exit 1 }
+$script:StageIndex = 0
+function Stage([string]$Title) {
+    $script:StageIndex++
+    Log ""
+    Log "=== $($script:StageIndex). $Title ==="
+}
 
 # Windows path -> /mnt/<drive>/... (for a given Windows abs path)
 function ConvertTo-WslPath([string]$WinPath) {
@@ -106,17 +114,38 @@ function Get-WslDistros {
     return @($txt -split "`r?`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 }
 
-# ---------------------------------------------------------------- 0. checks
+# ---------------------------------------------------------------- 0. preflight
+Stage "Preflight (environment summary)"
+Log "OS: $([Environment]::OSVersion.VersionString)"
+if (Get-Command py -ErrorAction SilentlyContinue) {
+    Log "Python launcher: found ($((py --version 2>&1) -join ' '))  [native daemon, optional]"
+} else {
+    Log "Python launcher: not found (only needed for the native Qiling daemon, WSL2 path does not need it)"
+}
+$vendoredBlob = Join-Path $PayloadDir 'blob\libScalable_Encoder.so'
+if ($BlobFrom) {
+    Log "SSC blob: user-provided (-BlobFrom) - validated later in the deploy stage."
+} elseif (Test-Path $vendoredBlob) {
+    Log "SSC blob: vendored copy present ($vendoredBlob)."
+    Log "  NOTE: this is a proprietary Samsung binary. For legal clarity prefer '-BlobFrom <your own extracted copy>'."
+} else {
+    Log "WARN: no SSC blob found anywhere (vendored or -BlobFrom)."
+    Log "  Streaming with SSC will be silent/empty until you provide one."
+}
+
 if (-not (Test-Path $PayloadDir)) {
-    Die "payload not found: $PayloadDir"
+    Die "payload not found: $PayloadDir" `
+        "checkout the submodules: 'git submodule update --init --recursive'"
 }
 if (-not (Test-Path "$env:SystemRoot\System32\wsl.exe")) {
-    Die "WSL is not available. Enable WSL2 first: 'wsl --install' (then reboot)."
+    Die "WSL is not available. Enable WSL2 first: 'wsl --install' (then reboot)." `
+        "run 'wsl --install' in an elevated PowerShell and reboot; if WSL is a legacy install, update via 'wsl --update'"
 }
 
 $distros = @(Get-WslDistros)
 if ($distros.Count -eq 0) {
-    Die "No WSL distro installed. Run 'wsl --install -d Ubuntu' first."
+    Die "No WSL distro installed. Run 'wsl --install -d Ubuntu' first." `
+        "install a distro with 'wsl --install -d Ubuntu' (requires reboot on first install)"
 }
 if ($Distro) {
     if ($distros -notcontains $Distro) {
@@ -134,7 +163,7 @@ Log "WSL home: $wslHome"
 $wslRepo = ConvertTo-WslPath $Repo
 Log "Payload source (WSL view): $wslRepo/tools/ssc_payload"
 
-# ------------------------------------------------------------ 1. WSL deploy
+Stage "WSL payload deploy"
 # Resolve which blob to deploy: the vendored copy, or the user's own -BlobFrom.
 $blobSrc = Join-Path $PayloadDir 'blob'
 if ($BlobFrom) {
@@ -180,8 +209,7 @@ if (($LASTEXITCODE -ne 0) -or ($deployOut -notmatch 'DEPLOYED')) {
 }
 Log "Payload deployed (blob, daemon source, helper, shims)."
 
-# -------------------------------------- 2. rewrite hardcoded /home/kaan5 paths
-Log "==> Rewriting daemon path defaults -> $wslHome ..."
+Stage "Daemon path rewrite"
 $fixScript = @'
 #!/bin/sh
 set -e
@@ -195,9 +223,8 @@ if (($LASTEXITCODE -ne 0) -or ($fixOut -notmatch 'PATHFIXED')) {
     Die "Daemon path rewrite failed:`n$($fixOut -join "`n")`n$($script:WslErr -join "`n")"
 }
 
-# ------------------------------------------------------------- 3. compile
+Stage "Compile sscblobd (gcc -O2)"
 if (-not $SkipCompile) {
-    Log "==> Compiling sscblobd (gcc -O2) ..."
     $haveGcc = Invoke-WslScript $Distro 'command -v gcc'
     if (-not $haveGcc) {
         if ($SkipApt) {
@@ -220,8 +247,8 @@ cd "$HOME/ssc/openssc/build_blob" && gcc -O2 -o sscblobd sscblobd.c && echo BUIL
     Log "SkipCompile set - not building sscblobd."
 }
 
-# --------------------------------------------------- 4. qemu + aarch64 sysroot
-Log "==> Checking qemu-aarch64 + aarch64 sysroot ..."
+# ------------------------------------ 5. qemu + aarch64 sysroot
+Stage "qemu + aarch64 sysroot"
 $qemuOut = Invoke-WslScript $Distro 'command -v qemu-aarch64 && test -d /usr/aarch64-linux-gnu && echo OK'
 if (($qemuOut -join "`n") -notmatch 'OK') {
     Log "qemu-user / aarch64 sysroot missing."
@@ -235,8 +262,8 @@ if (($qemuOut -join "`n") -notmatch 'OK') {
     Log "qemu-aarch64 + sysroot: OK."
 }
 
-# ----------------------------------------------------- 5. .wslconfig tuning
-Log "==> Ensuring .wslconfig (Phase-1 RAM/idle tuning) ..."
+# ----------------------------------------------------- 6. .wslconfig tuning
+Stage ".wslconfig tuning (RAM/idle)"
 $canonical = @(
     '',
     '[wsl2]',
@@ -306,23 +333,34 @@ if (-not (Test-Path $WslConfigPath)) {
     }
 }
 
-# ------------------------------------------------------------- 6. driver mode
-Log "==> Dongle driver mode (VID 2357:PID 0604) ..."
+# ------------------------------------------------------- 7. dongle check
+Stage "Dongle driver mode + firmware"
 $dev = Get-CimInstance Win32_PnPEntity -Filter "DeviceID LIKE 'USB\\VID_2357&PID_0604%'" -ErrorAction SilentlyContinue |
     Select-Object -First 1
 if (-not $dev) {
-    Log "Dongle not present (or not 2357:0604). Driver check skipped."
-} elseif ($dev.Service -eq 'winusb') {
-    Log "Dongle: WinUSB -> Streaming mode (SSC/A2DPWB path active)."
-} elseif ($dev.Service -match 'bth|bthenum') {
-    Log "Dongle: BTHUSB -> Windows BT mode (Streaming requires WinUSB; use Zadig or in-app toggle)."
+    Log "No TP-Link UB500 (VID_2357:PID_0604) dongle found."
+    Log "  Streaming needs the dongle plugged in. A different dongle may need a chipset/service tweak."
 } else {
-    Log "Dongle service='$($dev.Service)' status='$($dev.Status)' (unexpected)."
+    Log "Dongle: $($dev.Name)"
+    Log "  HW ID: $($dev.PNPDeviceID)"
+    if ($dev.Service -eq 'winusb') {
+        Log "  Service: winusb  ->  STREAMING MODE (good)."
+    } else {
+        Log "  Service: '$($dev.Service)' -> Windows BT mode; SSC streaming requires WinUSB."
+        Log "  Fix (choose one):"
+        Log "    A) Open the GUI -> 'Enable Streaming (WinUSB)' button (auto-elevated, generates a signed INF)."
+        Log "    B) Manual: Zadig -> replace driver for USB\VID_2357&PID_0604 with WinUSB."
+        Log "  After switching, replug the dongle (or use the in-app toggle which re-evaluates the devnode)."
+    }
+    if ($dev.PNPDeviceID -match 'VID_2357&PID_0604') {
+        Log "  Chipset: Realtek RTL8761B-class - proprietary dongle firmware may be required."
+        Log "  Firmware is NOT bundled (proprietary). The app logs when a Realtek firmware file is missing."
+    }
 }
 
-# ---------------------------------------------------------- 7. smoke (optional)
+# ---------------------------------------------------------- 8. smoke (optional)
 if ($Smoke) {
-    Log "==> Smoke: SSC golden regression (229k) ..."
+    Stage "Smoke test (golden regression 229k)"
     try { $py = (Get-Command python -ErrorAction Stop).Source } catch { Die "-Smoke needs python on PATH." }
     $env:SSC_DAEMON_SCRIPT = "$wslHome/ssc/bin/start_sscblobd"
     $env:SSC_WSL_DISTRO   = $Distro

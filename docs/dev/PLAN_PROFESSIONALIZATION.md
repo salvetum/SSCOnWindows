@@ -4,6 +4,19 @@
 > "PLAN_PROFESSIONALIZATION.md'deki Faz X'i uygula" şeklinde görev verebilirsin.
 > Her faz bağımsız bir PR/branch olacak şekilde tasarlandı; sırayla veya paralel yürütülebilir.
 
+## Durum
+
+| Faz | Konu | Durum |
+|-----|------|-------|
+| 0 | Envanter ve Denetim | ✅ `docs/dev/audit-2026.md` (commit c894219) |
+| 1 | Depo Hijyeni ve Lisans Uyumu | ✅ 44a3327 (gitignore + pre-commit + setup -BlobFrom + CONTRIBUTING) |
+| 2 | CI/CD | ✅ 96ea97a (build/lint/golden/release workflow'ları; vcxproj portability) |
+| 3 | Kurulum Otomasyonu | ✅ yerelde parse + dry-run doğrulandı (committed) |
+| 4 | Kod Kalitesi ve Test Kapsamı | ⏳ sıradaki |
+| 5 | Dokümantasyon ve Sürümleme | ⏳ |
+| 6 | Kapalı Kaynak SSC Bağımlılığı | ⏳ 6a öncelikli (denetim Faz 6a'ya ağırlık verdi) |
+| 7 | Topluluk ve Sürdürülebilirlik | ⏳ |
+
 ## Bağlam
 
 SSCOnWindows, Samsung'un kapalı kaynak SSC (Samsung Scalable/Seamless Codec) codec'ini
