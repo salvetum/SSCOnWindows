@@ -108,6 +108,31 @@ deneyimi bütünlüğü için üç yüzey aynı "stil kurallarını" paylaşmal�
 > birincil GUI olarak kaldığı sürece düşük öncelikli tutulur. CLI + WinUI birlikte
 > "birincil yüzey" sayılır ve tutarlılık hedefi oradadır.
 
+## Keşif maddesi — Kulaklık şarj göstergesi (çok düşük öncelik)
+
+**Durum:** açık / araştırma. **Öncelik: çok düşük** — bu planın (ve genel
+sıralamanın) en altında; yalnızca yol/güç kullanılmamış bir an omuza alındığında
+yapılır. Kullanıcı sadece merak; ANC gösterimi bilinçli olarak süphe dışıdır
+(vendor-GATT yazma komutları + Buds3 FE'de oturum kriptosu → durumun salt-okunur
+öğrenilmesi pratik değil).
+
+- **Hedef:** stream sırasında Buds3 FE şarj seviyesinin WinUI durum satırında
+  görüntülenmesi. Sesin kendisine dokunmaz (A2DP korunur).
+- **Yöntem (doğrulama adımı):** BTstack üzerinde ayrı bir **LE GATT bağlantısı** açan
+  küçük bir keşif modu (`--probe` benzeri). GATT servis dökümüyle karar verilir:
+  - `0x180F` (standart Battery Service) görünürse → okuyup WinUI'de göstermek
+    **küçük bir iş** (servis taraması + okuma + UI ama bütçe küçük).
+  - Battery yalnızca **vendor UUID'lerde** ise → RE gerekir; bu durumda madde
+    kapatılır, token bulunamadığı için yapılmaz.
+- **Risk/bağımlılık:** LE yan bağlantısının mevcut BR/EDR stream'ini bozmaması
+  (BTstack EHCI'de ikisini de yönetebilir; soak testinde LE denenmedi → önce küçük
+  bir kanıt oturumu gerekir).
+- **Kapsam dışı:** ANC modu gösterimi/değişimi; kasa şarjı; telefon bağlantı
+  durumu gibi "diğer kulaklık telemetrisi".
+
+Bu maddenin yapılması ayrıca kararlanır; öncelikli işlerde (Faz A-D, profesyonelleşme
+Faz 4+, robustness) yol alındıkça üst kapağı açılır.
+
 ## opencode için kullanım notu
 
 ```
