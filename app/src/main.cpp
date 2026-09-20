@@ -37,6 +37,7 @@
 #include "bt_adapter_enum.h"
 #include "config_path.h"
 #include "resampler.h"
+#include "console_style.h"
 #include "wx_app.h"
 
 /* Global state */
@@ -148,9 +149,21 @@ static void audio_callback(
             uint32_t qd = 0, sf = 0;
             BtStackTransport *t = g_transport.load();
             if (t) { qd = t->get_queue_depth(); sf = t->get_and_reset_send_failure_count(); }
-            fprintf(stderr, "CAP: frames=%llu rate=%.0ffs bytes=%llu rms_avg=%.6f db=%.1f queue=%u fail=%u\n",
-                (unsigned long long)g_cb_samples_total, rate,
-                (unsigned long long)g_cb_bytes_total, rms_avg, db, qd, sf);
+            cstyle::fprint(stderr, cstyle::Tag::Data, "CAP:     ");
+            fprintf(stderr, "frames=%llu rate=",
+                    (unsigned long long)g_cb_samples_total);
+            if (rate < 48000.0)
+                cstyle::fprint(stderr, cstyle::Tag::Warn, "%.0ffs", rate);
+            else
+                fprintf(stderr, "%.0ffs", rate);
+            fprintf(stderr, " bytes=%llu rms_avg=%.6f db=%.1f queue=",
+                    (unsigned long long)g_cb_bytes_total, rms_avg, db);
+            if (qd > 0) cstyle::fprint(stderr, cstyle::Tag::Warn, "%u", qd);
+            else fprintf(stderr, "%u", qd);
+            fprintf(stderr, " fail=");
+            if (sf > 0) cstyle::fprint(stderr, cstyle::Tag::Error, "%u", sf);
+            else fprintf(stderr, "%u", sf);
+            fprintf(stderr, "\n");
             /* Per-window STATS: effective bitrate + average encode latency */
             {
                 static uint64_t s_last_bytes = 0, s_last_us = 0;
@@ -164,8 +177,14 @@ static void audio_callback(
                 s_last_bytes = g_enc_bytes_total;
                 s_last_us = g_enc_us_total;
                 s_last_calls = g_enc_calls;
-                fprintf(stderr, "STATS: bitrate=%.0fkbps enc_avg=%.2fms enc_calls=%u enc_bytes=%llu\n",
-                        kbps, enc_avg_ms, g_enc_calls, (unsigned long long)g_enc_bytes_total);
+                cstyle::fprint(stderr, cstyle::Tag::Data, "STATS:   ");
+                fprintf(stderr, "bitrate=%.0fkbps enc_avg=", kbps);
+                if (enc_avg_ms > 15.0)
+                    cstyle::fprint(stderr, cstyle::Tag::Warn, "%.2fms", enc_avg_ms);
+                else
+                    fprintf(stderr, "%.2fms", enc_avg_ms);
+                fprintf(stderr, " enc_calls=%u enc_bytes=%llu\n",
+                        g_enc_calls, (unsigned long long)g_enc_bytes_total);
             }
             fflush(stderr);
         }
@@ -420,8 +439,11 @@ static void audio_callback(
     if (cb_ms > max_cb_ms) max_cb_ms = cb_ms;
     if (cb_now - last_cb_diag >= 2000) {
         last_cb_diag = cb_now;
-        fprintf(stderr, "CB: last-call=%.2fms max=%.2fms frames=%u\n",
-                cb_ms, max_cb_ms, frames);
+        cstyle::fprint(stderr, cstyle::Tag::Data, "CB:      ");
+        fprintf(stderr, "last-call=");
+        if (cb_ms > 15.0) cstyle::fprint(stderr, cstyle::Tag::Warn, "%.2fms", cb_ms);
+        else fprintf(stderr, "%.2fms", cb_ms);
+        fprintf(stderr, " max=%.2fms frames=%u\n", max_cb_ms, frames);
         max_cb_ms = 0;
     }
 
@@ -454,6 +476,7 @@ static void print_usage(const char *prog) {
     printf("  --bit-depth <bits>    PCM bit depth (accepted for compatibility; fixed per codec)\n");
     printf("  --uhq                 SSC UHQ mode: encode at 96 kHz (2x SRC from 48 kHz)\n");
     printf("  --ssc-native          Use the Windows-native Qiling SSC daemon instead of WSL2\n");
+    printf("  --no-color            Disable ANSI colors in CLI output\n");
     printf("  --bitrate <kbps>      SSC bitrate override (0=auto; snapped to a supported value)\n");
     printf("                        (spawns tools\\ssc_daemon\\sscblobd.py; env SSC_DAEMON_PY override)\n");
     printf("  -l           List available Bluetooth audio devices and exit\n");
@@ -532,9 +555,10 @@ static int run_streaming(const uint8_t target_addr[6],
     }
 
     /* --- Step 2: Initialize BTstack --- */
-    printf("\n[2/5] Initializing BTstack (WinUSB transport)...\n");
+    cstyle::fprint(stdout, cstyle::Tag::Bold,
+                   "\n[2/5] Initializing BTstack (WinUSB transport)...\n");
     if (!transport.init(usb_path)) {
-        fprintf(stderr,
+        cstyle::fprint(stderr, cstyle::Tag::Error,
             "Failed to initialize BTstack.\n"
             "Ensure a USB Bluetooth adapter is connected and its driver\n"
             "has been replaced with WinUSB using Zadig.\n");
@@ -542,13 +566,15 @@ static int run_streaming(const uint8_t target_addr[6],
     }
 
     /* Optional scan: skip if connecting to a known device address */
-    printf("\n[2.5/5] Radio ready. Skipping scan (connecting to specified device).\n");
+    cstyle::fprint(stdout, cstyle::Tag::Bold,
+                   "\n[2.5/5] Radio ready. Skipping scan (connecting to specified device).\n");
 
     /* --- Step 3: Connect and discover codecs --- */
-    printf("\n[3/5] Connecting and negotiating codec...\n");
+    cstyle::fprint(stdout, cstyle::Tag::Bold,
+                   "\n[3/5] Connecting and negotiating codec...\n");
     printf("(This may take up to 30 seconds if the device is slow to respond.)\n");
     if (!transport.connect_a2dp(target_addr)) {
-        fprintf(stderr,
+        cstyle::fprint(stderr, cstyle::Tag::Error,
             "Failed to connect to Bluetooth device.\n"
             "Troubleshooting:\n"
             "  - Ensure the headphones are in PAIRING mode (not just powered on)\n"
@@ -564,19 +590,22 @@ static int run_streaming(const uint8_t target_addr[6],
     AudioCodec selected_codec;
     if (!find_best_btstack_codec(transport.get_remote_caps(),
                                   requested_codec, &selected_codec)) {
-        fprintf(stderr, "No compatible codec found on device.\n"
-                "Device must support SSC, AAC, or SBC.\n");
+        cstyle::fprint(stderr, cstyle::Tag::Error,
+            "No compatible codec found on device.\n"
+            "Device must support SSC, AAC, or SBC.\n");
         transport.disconnect();
         transport.shutdown();
         return 1;
     }
 
     g_active_codec = selected_codec;
-    printf("Selected codec: %s\n", codec_name_str(selected_codec));
+    cstyle::fprint(stdout, cstyle::Tag::Ok, "Selected codec: %s\n",
+                   codec_name_str(selected_codec));
 
     /* --- Step 4: Initialize audio capture and encoder --- */
-    printf("\n[4/5] Initializing audio capture and %s encoder...\n",
-           codec_name_str(selected_codec));
+    cstyle::fprint(stdout, cstyle::Tag::Bold,
+                   "\n[4/5] Initializing audio capture and %s encoder...\n",
+                   codec_name_str(selected_codec));
 
     WasapiCapture wasapi_capture;
     std::wstring saved_default_device;
@@ -585,7 +614,8 @@ static int run_streaming(const uint8_t target_addr[6],
     case CaptureMode::SystemLoopback:
         printf("Capture mode: System Loopback\n");
         if (!wasapi_capture.init()) {
-            fprintf(stderr, "Failed to initialize WASAPI capture\n");
+            cstyle::fprint(stderr, cstyle::Tag::Error,
+                           "Failed to initialize WASAPI capture\n");
             transport.disconnect();
             transport.shutdown();
             return 1;
@@ -595,7 +625,8 @@ static int run_streaming(const uint8_t target_addr[6],
     case CaptureMode::VirtualDevice:
         printf("Capture mode: Virtual Device\n");
         if (!audio_device_id) {
-            fprintf(stderr, "No audio device ID specified for virtual mode\n");
+            cstyle::fprint(stderr, cstyle::Tag::Error,
+                           "No audio device ID specified for virtual mode\n");
             transport.disconnect();
             transport.shutdown();
             return 1;
@@ -604,7 +635,8 @@ static int run_streaming(const uint8_t target_addr[6],
         saved_default_device = AudioDeviceEnumerator::get_default_device_id();
         AudioDeviceEnumerator::set_default_device(audio_device_id);
         if (!wasapi_capture.init(0, audio_device_id)) {
-            fprintf(stderr, "Failed to initialize capture on virtual device\n");
+            cstyle::fprint(stderr, cstyle::Tag::Error,
+                           "Failed to initialize capture on virtual device\n");
             if (!saved_default_device.empty())
                 AudioDeviceEnumerator::set_default_device(saved_default_device);
             transport.disconnect();
@@ -624,9 +656,10 @@ static int run_streaming(const uint8_t target_addr[6],
         const auto &rc = transport.get_remote_caps();
         if (rc.ssc_uhq) {
             encode_sr = 96000;
-            fprintf(stderr, "\n*** SSC UHQ: encode at 96 kHz (WASAPI capture 48 kHz, 2x SRC) ***\n");
+            cstyle::fprint(stderr, cstyle::Tag::Data,
+                           "\n*** SSC UHQ: encode at 96 kHz (WASAPI capture 48 kHz, 2x SRC) ***\n");
         } else {
-            fprintf(stderr,
+            cstyle::fprint(stderr, cstyle::Tag::Warn,
                     "\n*** SSC UHQ unavailable: remote SSC cap=0x%02X has no UHQ(0x02) bit. ***\n"
                     "*** Falling back to 48 kHz SSC — device does not decode 96 kHz. ***\n",
                     rc.ssc_cap);
@@ -642,7 +675,8 @@ static int run_streaming(const uint8_t target_addr[6],
     /* Configure stream — use encode_sr for the remote side */
     if (!transport.configure_codec(selected_codec, encode_sr,
                                     static_cast<uint8_t>(g_active_channels))) {
-        fprintf(stderr, "Failed to configure %s stream\n", codec_name_str(selected_codec));
+        cstyle::fprint(stderr, cstyle::Tag::Error, "Failed to configure %s stream\n",
+                       codec_name_str(selected_codec));
         transport.disconnect();
         transport.shutdown();
         return 1;
@@ -659,7 +693,8 @@ static int run_streaming(const uint8_t target_addr[6],
     case AudioCodec::AAC:    encoder = std::make_unique<AacEncoder>(); break;
 #else
     case AudioCodec::AAC:
-        fprintf(stderr, "AAC encoder not available (fdk-aac not built)\n");
+        cstyle::fprint(stderr, cstyle::Tag::Error,
+                       "AAC encoder not available (fdk-aac not built)\n");
         transport.disconnect();
         transport.shutdown();
         return 1;
@@ -674,7 +709,8 @@ static int run_streaming(const uint8_t target_addr[6],
     }
 
     if (!encoder->init(media_mtu, quality, encode_sr, g_active_channels)) {
-        fprintf(stderr, "Failed to initialize %s encoder\n", codec_name_str(selected_codec));
+        cstyle::fprint(stderr, cstyle::Tag::Error, "Failed to initialize %s encoder\n",
+                       codec_name_str(selected_codec));
         transport.disconnect();
         transport.shutdown();
         return 1;
@@ -686,14 +722,16 @@ static int run_streaming(const uint8_t target_addr[6],
 
     /* Start streaming */
     if (!transport.start_stream()) {
-        fprintf(stderr, "Failed to start stream\n");
+        cstyle::fprint(stderr, cstyle::Tag::Error, "Failed to start stream\n");
         transport.disconnect();
         transport.shutdown();
         return 1;
     }
 
     /* --- Step 5: Stream --- */
-    printf("\n[5/5] Streaming %s audio (BTstack/WinUSB)...\n", codec_name_str(selected_codec));
+    cstyle::fprint(stdout, cstyle::Tag::Bold,
+                   "\n[5/5] Streaming %s audio (BTstack/WinUSB)...\n",
+                   codec_name_str(selected_codec));
     printf("Codec: %s | Bitrate: %u kbps | Sample rate: %u Hz | Channels: %u\n",
            encoder->codec_name(), encoder->get_bitrate_kbps(),
            sample_rate, g_active_channels);
@@ -727,7 +765,7 @@ static int run_streaming(const uint8_t target_addr[6],
 
     bool cli_capture_started = wasapi_capture.start(audio_callback);
     if (!cli_capture_started) {
-        fprintf(stderr, "Failed to start audio capture\n");
+        cstyle::fprint(stderr, cstyle::Tag::Error, "Failed to start audio capture\n");
         if (!saved_default_device.empty())
             AudioDeviceEnumerator::set_default_device(saved_default_device);
         transport.disconnect();
@@ -752,7 +790,8 @@ static int run_streaming(const uint8_t target_addr[6],
 
         /* Check if connection was lost */
         if (transport.check_disconnected()) {
-            printf("\n*** Connection lost — attempting to reconnect ***\n");
+            cstyle::fprint(stdout, cstyle::Tag::Warn,
+                           "\n*** Connection lost — attempting to reconnect ***\n");
 
             /* Pause audio capture during reconnect to avoid buffering stale data */
             g_transport.store(nullptr);
@@ -779,7 +818,8 @@ static int run_streaming(const uint8_t target_addr[6],
             }
 
             if (!reconnected) {
-                fprintf(stderr, "Failed to reconnect after %d attempts. Exiting.\n",
+                cstyle::fprint(stderr, cstyle::Tag::Error,
+                        "Failed to reconnect after %d attempts. Exiting.\n",
                         MAX_RECONNECT_ATTEMPTS);
                 break;
             }
@@ -789,12 +829,13 @@ static int run_streaming(const uint8_t target_addr[6],
             g_pcm_residual.clear();
             g_encoder.store(encoder.get());
             g_transport.store(&transport);
-            printf("*** Reconnected — resuming streaming ***\n\n");
+            cstyle::fprint(stdout, cstyle::Tag::Ok,
+                           "*** Reconnected — resuming streaming ***\n\n");
         }
     }
 
     /* Cleanup */
-    printf("\nShutting down...\n");
+    cstyle::fprint(stdout, cstyle::Tag::Dim, "\nShutting down...\n");
     wasapi_capture.stop();
     if (cli_output_muted) {
         wasapi_capture.mute_output(false);
@@ -813,7 +854,7 @@ static int run_streaming(const uint8_t target_addr[6],
     }
 
     encoder->shutdown();
-    printf("Done.\n");
+    cstyle::fprint(stdout, cstyle::Tag::Ok, "Done.\n");
     return 0;
 }
 
@@ -828,11 +869,14 @@ int main(int argc, char *argv[]) {
     /* Check for GUI mode (default) vs CLI mode */
     bool cli_mode = false;
     bool start_minimized = false;
+    bool no_color = false;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--cli") == 0) {
             cli_mode = true;
         } else if (strcmp(argv[i], "--minimized") == 0) {
             start_minimized = true;
+        } else if (strcmp(argv[i], "--no-color") == 0) {
+            no_color = true;
         }
     }
 
@@ -879,9 +923,12 @@ int main(int argc, char *argv[]) {
     }
 
     /* CLI mode */
-    printf("SSC On Windows v%s (by Salvetum)\n", APP_VERSION);
+    cstyle::init(no_color);
+    cstyle::fprint(stdout, cstyle::Tag::Bold,
+                   "SSC On Windows v%s (by Salvetum)\n", APP_VERSION);
     printf("Codecs: SSC | AAC | SBC\n");
-    printf("===================================================\n\n");
+    cstyle::fprint(stdout, cstyle::Tag::Dim,
+                   "===================================================\n\n");
 
     /* Parse command-line arguments */
     EncoderQuality quality = EncoderQuality::High;
@@ -942,6 +989,8 @@ int main(int argc, char *argv[]) {
             g_ssc_native_daemon = true;
         } else if (strcmp(argv[i], "--bitrate") == 0 && i + 1 < argc) {
             g_ssc_bitrate_kbps = static_cast<uint32_t>(atoi(argv[++i]));
+        } else if (strcmp(argv[i], "--no-color") == 0) {
+            continue;  /* handled in the pre-scan above */
         } else if (strcmp(argv[i], "-h") == 0) {
             print_usage(argv[0]);
             return 0;

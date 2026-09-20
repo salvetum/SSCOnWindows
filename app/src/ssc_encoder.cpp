@@ -5,6 +5,7 @@
  */
 
 #include "ssc_encoder.h"
+#include "console_style.h"
 
 #include <cstdio>
 #include <cstring>
@@ -409,8 +410,15 @@ bool SscEncoder::encode(const uint8_t *pcm_data, uint32_t pcm_bytes,
     if (t_tot > max_total) max_total = t_tot;
     if (diag_tick == 0) diag_tick = GetTickCount();
     if (GetTickCount() - diag_tick >= 2000) {
-        fprintf(stderr, "SSC: enc%u t_send=%.2fms t_hdr=%.2fms t_data=%.2fms total=%.2fms max=%.2fms ret=%d\n",
-                diag_count, t_send, t_hdr, t_data, t_tot, max_total, ret);
+        cstyle::fprint(stderr, cstyle::Tag::Data, "SSC:     ");
+        fprintf(stderr, "enc%u t_send=%.2fms t_hdr=%.2fms t_data=%.2fms total=",
+                diag_count, t_send, t_hdr, t_data);
+        if (t_tot > 15.0) cstyle::fprint(stderr, cstyle::Tag::Warn, "%.2fms", t_tot);
+        else fprintf(stderr, "%.2fms", t_tot);
+        fprintf(stderr, " max=%.2fms ret=", max_total);
+        if (ret <= 0) cstyle::fprint(stderr, cstyle::Tag::Error, "%d", ret);
+        else fprintf(stderr, "%d", ret);
+        fprintf(stderr, "\n");
         diag_count = 0; diag_tick = GetTickCount(); max_total = 0.0;
     }
 #else

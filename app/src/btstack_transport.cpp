@@ -7,6 +7,7 @@
  */
 
 #include "btstack_transport.h"
+#include "console_style.h"
 
 #include <cstdio>
 #include <cstring>
@@ -1467,9 +1468,12 @@ void BtStackTransport::handle_a2dp_event(uint8_t *packet, uint16_t size) {
             DWORD now = GetTickCount();
             if (now - diag_last >= 2000) {
                 diag_last = now;
-                fprintf(stderr, "BTstack: CTX can_send=%u ok=%u err=%u q=%u\n",
-                        diag_can_send, diag_tx_ok, diag_tx_err,
-                        media_queue_count_.load());
+                cstyle::fprint(stderr, cstyle::Tag::Data, "BTstack: ");
+                fprintf(stderr, "CTX can_send=%u ok=%u err=",
+                        diag_can_send, diag_tx_ok);
+                if (diag_tx_err > 0) cstyle::fprint(stderr, cstyle::Tag::Error, "%u", diag_tx_err);
+                else fprintf(stderr, "%u", diag_tx_err);
+                fprintf(stderr, " q=%u\n", media_queue_count_.load());
             }
             /* Chain next CAN_SEND_NOW if queue still has data.
              * If empty, send_media() will trigger when new data arrives. */

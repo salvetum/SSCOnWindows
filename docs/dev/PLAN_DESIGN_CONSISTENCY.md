@@ -27,6 +27,15 @@ deneyimi bütünlüğü için üç yüzey aynı "stil kurallarını" paylaşmal�
 
 ---
 
+## Durum
+
+| Faz | Konu | Durum |
+|-----|------|-------|
+| A | CLI konsol okunabilirliği | ✅ `app/src/console_style.h` + `main.cpp`/`ssc_encoder.cpp`/`btstack_transport.cpp`; `--no-color`/`NO_COLOR`/TTY; build OK |
+| B | Yazı (tipografi) politikası | ⏳ |
+| C | GUI (WinUI + wx) tutarlılığı | ⏳ |
+| D | Referans ve doğrulama (`docs/ui-style.md`) | ⏳ |
+
 ## Genel kural tanımı (tüm fazlara ortak)
 
 1. **Tek çıktı dili:** `INFO`, `OK`, `WARN`, `ERROR`, `DATA` (diyagnostik) etiketleri
