@@ -19,9 +19,11 @@
             <ResourceDictionary.ThemeDictionaries>
                 <ResourceDictionary x:Key="Light">
                     <SolidColorBrush x:Key="SubtleTextBrush" Color="#717171" />
+                    <SolidColorBrush x:Key="StatusTextBrush" Color="#6D6D6D" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Dark">
                     <SolidColorBrush x:Key="SubtleTextBrush" Color="#9E9E9E" />
+                    <SolidColorBrush x:Key="StatusTextBrush" Color="#B5B5B5" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 

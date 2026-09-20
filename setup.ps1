@@ -52,14 +52,15 @@ $WslConfigPath = Join-Path $env:USERPROFILE '.wslconfig'
 
 function Log  { if (-not $Quiet) { Write-Host $args } }
 function Die  { param([string]$Msg, [string]$Tip = '')
-    Write-Host "ERROR: $Msg" -ForegroundColor Red
-    if ($Tip) { Write-Host "  Fix: $Tip" -ForegroundColor Yellow }
+    Write-Host "[ERROR] $Msg" -ForegroundColor Red
+    if ($Tip) { Write-Host "[WARN]  Fix: $Tip" -ForegroundColor Yellow }
     exit 1 }
 $script:StageIndex = 0
 function Stage([string]$Title) {
+    # Same tag language as the CLI/WinUI log (INFO/OK/WARN/ERROR/DATA).
     $script:StageIndex++
     Log ""
-    Log "=== $($script:StageIndex). $Title ==="
+    Log "[INFO]  Step $($script:StageIndex): $Title"
 }
 
 # Windows path -> /mnt/<drive>/... (for a given Windows abs path)
@@ -369,5 +370,5 @@ if ($Smoke) {
     Log "Golden 229k: PASS."
 }
 
-Log "Done. Setup complete: $Distro @ $wslHome"
+Log "[ OK ]  Setup complete: $Distro @ $wslHome"
 Log "Run a stream with:  .\start.ps1 -Codec ssc -Device 78:C1:1D:A7:BC:EE"

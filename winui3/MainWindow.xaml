@@ -64,7 +64,7 @@ Title="SSC On Windows"
         <!-- ===================== Status ===================== -->
         <Border Grid.Row="1" Padding="12,4" CornerRadius="4"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-            <TextBlock x:Name="StatusText" Text="Ready" Foreground="Gray" />
+            <TextBlock x:Name="StatusText" Text="Ready" Foreground="{ThemeResource StatusTextBrush}" />
         </Border>
 
         <!-- ===================== Main content ===================== -->
