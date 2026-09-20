@@ -6,8 +6,19 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:local="using:A2DPWBWinUI"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-    Title="SSC On Windows"
+Title="SSC On Windows"
     mc:Ignorable="d">
+
+    <!--
+      Typography policy (docs/dev/PLAN_DESIGN_CONSISTENCY.md, Faz B):
+        UI / sans : 'Segoe UI Variable Text' (Win11) -> 'Segoe UI' fallback
+                    (WinUI default theme font; faz C renk/token isi bu isi almaz)
+        Mono/diag : 'Cascadia Mono' (OFL, ships with Windows Terminal)
+                    -> 'Consolas' fallback   (log pane)
+        Numerals  : tabular alignment on stats/value fields:
+                    Typography.NumeralAlignment="Tabular"
+        No fonts are bundled or embedded; all are OS-distributed.
+    -->
 
     <!-- 
       Overall layout:
@@ -144,8 +155,9 @@
                             <StackPanel Spacing="4">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <TextBlock Text="Bitrate:" Width="80" VerticalAlignment="Center" />
-                                    <TextBlock x:Name="BitrateValueText" Text="auto"
-                                               VerticalAlignment="Center" FontWeight="SemiBold" />
+<TextBlock x:Name="BitrateValueText" Text="auto"
+                                               VerticalAlignment="Center" FontWeight="SemiBold"
+                                               Typography.NumeralAlignment="Tabular" />
                                     <TextBlock Text="(0 = auto)" VerticalAlignment="Center"
                                                Foreground="Gray" FontSize="12" />
                                 </StackPanel>
@@ -163,8 +175,9 @@
                             <StackPanel Spacing="4">
                                 <StackPanel Orientation="Horizontal" Spacing="8">
                                     <TextBlock Text="Volume:" Width="80" VerticalAlignment="Center" />
-                                    <TextBlock x:Name="VolumeValueText" Text="100%"
-                                               VerticalAlignment="Center" FontWeight="SemiBold" />
+<TextBlock x:Name="VolumeValueText" Text="100%"
+                                               VerticalAlignment="Center" FontWeight="SemiBold"
+                                               Typography.NumeralAlignment="Tabular" />
                                 </StackPanel>
                                 <Slider x:Name="VolumeSlider" Minimum="0" Maximum="100"
                                         StepFrequency="1" Value="100" Width="340"
@@ -207,10 +220,10 @@
                     <!-- Stream info -->
                     <Expander Header="Stream Info">
                         <StackPanel Spacing="6" Margin="0,8,0,0">
-                            <TextBlock x:Name="CodecText" Text="Codec: ---" />
-                            <TextBlock x:Name="BitrateText" Text="Bitrate: ---" />
-                            <TextBlock x:Name="SampleRateText" Text="Sample Rate: ---" />
-                            <TextBlock x:Name="ChannelsText" Text="Channels: ---" />
+<TextBlock x:Name="CodecText" Text="Codec: ---" Typography.NumeralAlignment="Tabular" />
+                            <TextBlock x:Name="BitrateText" Text="Bitrate: ---" Typography.NumeralAlignment="Tabular" />
+                            <TextBlock x:Name="SampleRateText" Text="Sample Rate: ---" Typography.NumeralAlignment="Tabular" />
+                            <TextBlock x:Name="ChannelsText" Text="Channels: ---" Typography.NumeralAlignment="Tabular" />
                             <TextBlock x:Name="SourceInfoText" Text="Source: ---" Foreground="Gray" FontSize="12" />
                         </StackPanel>
                     </Expander>
@@ -219,11 +232,12 @@
                     <Expander Header="Live Stats">
                         <StackPanel Spacing="8" Margin="0,8,0,0">
                             <StackPanel Orientation="Horizontal" Spacing="16">
-                                <TextBlock x:Name="LatencyText" Text="Latency: ---" />
-                                <TextBlock x:Name="ErrorRateText" Text="Error Rate: ---" />
-                                <TextBlock x:Name="LossRateText" Text="Loss Rate: ---" />
+<TextBlock x:Name="LatencyText" Text="Latency: ---" Typography.NumeralAlignment="Tabular" />
+                                <TextBlock x:Name="ErrorRateText" Text="Error Rate: ---" Typography.NumeralAlignment="Tabular" />
+                                <TextBlock x:Name="LossRateText" Text="Loss Rate: ---" Typography.NumeralAlignment="Tabular" />
                             </StackPanel>
-                            <TextBlock x:Name="QueueText" Text="Queue: ---" Foreground="Gray" FontSize="12" />
+                            <TextBlock x:Name="QueueText" Text="Queue: ---" Foreground="Gray" FontSize="12"
+                                       Typography.NumeralAlignment="Tabular" />
                             <Border Height="56" Padding="4"
                                     Background="#15FFFFFF"
                                     BorderBrush="{ThemeResource SystemControlForegroundBaseMediumBrush}"
@@ -249,8 +263,8 @@
                 BorderThickness="1" CornerRadius="4"
                 Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
             <ScrollViewer x:Name="LogScroller" VerticalScrollBarVisibility="Auto">
-                <TextBlock x:Name="LogText" Text="Ready" FontFamily="Consolas" FontSize="11"
-                           TextWrapping="Wrap" />
+<TextBlock x:Name="LogText" Text="Ready" FontFamily="Cascadia Mono,Consolas"
+                           FontSize="12" LineHeight="16" TextWrapping="Wrap" />
             </ScrollViewer>
         </Border>
     </Grid>
