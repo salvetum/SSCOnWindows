@@ -33,7 +33,7 @@ deneyimi bütünlüğü için üç yüzey aynı "stil kurallarını" paylaşmal�
 |-----|------|-------|
 | A | CLI konsol okunabilirliği | ✅ `app/src/console_style.h` + `main.cpp`/`ssc_encoder.cpp`/`btstack_transport.cpp`; `--no-color`/`NO_COLOR`/TTY; build OK |
 | B | Yazı (tipografi) politikası | ✅ WinUI: log paneli `Cascadia Mono,Consolas` 12px/1.35 satır arası; istatistik + değer alanlarında `Typography.NumeralAlignment="Tabular"`; font seti XAML başına komut bloğu olarak yazıldı; WinUI build OK |
-| C | GUI (WinUI + wx) tutarlılığı | ⏳ |
+| C | GUI (WinUI + wx) tutarlılığı | ✅ App.xaml tasarım tokenları (Light/Dark ThemeDictionaries + `TagOkBrush`/`TagWarnBrush`/`TagErrorBrush`/`TagDataBrush`); ortak `AppButtonStyle`/metin stilleri + `StatsValueTextStyle` (tabular); log paneli satır-başına TextBlock + CLI shiddet renkleri (`MonoLogTextStyle`); sparkline etiketleri CLI birimiyle aynı ("Latency (0–25 ms) / Error (0–5 %)"); wx parity `theme_manager.h`'da dokümente edildi; WinUI build OK |
 | D | Referans ve doğrulama (`docs/ui-style.md`) | ⏳ |
 
 ## Genel kural tanımı (tüm fazlara ortak)

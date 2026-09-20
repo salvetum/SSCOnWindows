@@ -32,6 +32,18 @@ namespace
         MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), result.data(), len);
         return hstring(result);
     }
+
+    /* Severity brush lookup from the app ResourceDictionary (App.xaml tokens).
+     * Returns null for missing keys so callers can fall back to the default text color. */
+    Microsoft::UI::Xaml::Media::SolidColorBrush TagBrush(const wchar_t* key)
+    {
+        try {
+            auto resources = Application::Current().Resources();
+            auto value = resources.TryLookup(winrt::box_value(key));
+            if (value) return value.as<Microsoft::UI::Xaml::Media::SolidColorBrush>();
+        } catch (...) {}
+        return nullptr;
+    }
 }
 
 namespace winrt::A2DPWBWinUI::implementation
@@ -111,9 +123,9 @@ namespace winrt::A2DPWBWinUI::implementation
                 auto devices = captured->service_->get_devices();
                 captured->ScanButton().IsEnabled(true);
                 if (devices.empty()) {
-                    captured->AppendLog("No devices found.");
+                    captured->AppendLog(LogTag::Warn, "No devices found.");
                 } else {
-                    captured->AppendLog("Found " + std::to_string(devices.size()) + " device(s).");
+                    captured->AppendLog(LogTag::Ok, "Found " + std::to_string(devices.size()) + " device(s).");
                     for (const auto& dev : devices) {
                         captured->DeviceListView().Items().Append(
                             winrt::box_value(AToW(dev.name + " (" + dev.addr_str + ")")));
@@ -122,7 +134,7 @@ namespace winrt::A2DPWBWinUI::implementation
             });
         });
 
-        AppendLog("Settings loaded. Chip PID: 0x" + [&]() {
+        AppendLog(LogTag::Data, "Settings loaded. Chip PID: 0x" + [&]() {
             char buf[8]; snprintf(buf, sizeof(buf), "%04X", settings_.bt_chip_pid); return std::string(buf);
         }() + ", FW stem: " + (settings_.bt_chip_fw_stem.empty() ? "(none)" : settings_.bt_chip_fw_stem) + ". Ready.");
 
@@ -141,7 +153,7 @@ namespace winrt::A2DPWBWinUI::implementation
         if (settings_.auto_connect_on_start && !settings_.last_device_mac.empty()) {
             auto st = detect_dongle_driver(0x2357, 0x0604);
             if (st.mode != DongleDriverMode::WinUsbStream) {
-                AppendLog("Auto-connect skipped: dongle is not in WinUSB (Streaming) mode. "
+                AppendLog(LogTag::Warn, "Auto-connect skipped: dongle is not in WinUSB (Streaming) mode. "
                           "Click 'Enable Streaming (WinUSB)' in the Streaming Mode panel.");
             } else {
                 AppendLog("Auto-connecting to last device " + settings_.last_device_name +
@@ -182,7 +194,7 @@ namespace winrt::A2DPWBWinUI::implementation
         }
 
         if (!hasSelectedDevice_) {
-            AppendLog("No device selected. Use 'Scan Devices' or 'Direct Connect'.");
+            AppendLog(LogTag::Warn, "No device selected. Use 'Scan Devices' or 'Direct Connect'.");
             return;
         }
 
@@ -216,7 +228,7 @@ namespace winrt::A2DPWBWinUI::implementation
         auto macHstring = MacAddressBox().Text();
         std::string mac = WToA(macHstring);
         if (mac.empty() || mac.size() < 17) {
-            AppendLog("Invalid MAC address.");
+            AppendLog(LogTag::Error, "Invalid MAC address.");
             return;
         }
 
@@ -224,7 +236,7 @@ namespace winrt::A2DPWBWinUI::implementation
         unsigned int a[6];
         if (sscanf_s(mac.c_str(), "%02x:%02x:%02x:%02x:%02x:%02x",
                      &a[0], &a[1], &a[2], &a[3], &a[4], &a[5]) != 6) {
-            AppendLog("Invalid MAC format. Use XX:XX:XX:XX:XX:XX");
+            AppendLog(LogTag::Error, "Invalid MAC format. Use XX:XX:XX:XX:XX:XX");
             return;
         }
 
@@ -250,7 +262,7 @@ namespace winrt::A2DPWBWinUI::implementation
 
     void MainWindow::OnClearLogClick(IInspectable const&, RoutedEventArgs const&)
     {
-        LogText().Text(L"");
+        LogLines().Children().Clear();
     }
 
     void MainWindow::OnDeviceSelectionChanged(IInspectable const&, Controls::SelectionChangedEventArgs const&)
@@ -263,7 +275,7 @@ namespace winrt::A2DPWBWinUI::implementation
             selectedDevice_ = devices[idx];
             hasSelectedDevice_ = true;
             ConnectButton().IsEnabled(true);
-            AppendLog("Selected: " + selectedDevice_.name);
+            AppendLog(LogTag::Data, "Selected: " + selectedDevice_.name);
         } else {
             hasSelectedDevice_ = false;
             ConnectButton().IsEnabled(false);
@@ -372,8 +384,8 @@ namespace winrt::A2DPWBWinUI::implementation
         if (service_) {
             bool enabled = AutoMuteCheck().IsChecked().Value();
             service_->set_auto_mute_output(enabled);
-            AppendLog(enabled ? "Auto-mute output: ON (speakers muted while streaming)"
-                              : "Auto-mute output: OFF");
+            AppendLog(LogTag::Data, enabled ? "Auto-mute output: ON (speakers muted while streaming)"
+                                            : "Auto-mute output: OFF");
         }
     }
 
@@ -381,8 +393,8 @@ namespace winrt::A2DPWBWinUI::implementation
     {
         settings_.auto_connect_on_start = AutoConnectCheck().IsChecked().Value();
         settings_.save();
-        AppendLog(settings_.auto_connect_on_start ? "Auto-connect on start: ON"
-                                                  : "Auto-connect on start: OFF");
+        AppendLog(LogTag::Data, settings_.auto_connect_on_start ? "Auto-connect on start: ON"
+                                                              : "Auto-connect on start: OFF");
     }
 
     void MainWindow::RememberLastDevice(const std::string& mac, const std::string& name)
@@ -405,13 +417,13 @@ namespace winrt::A2DPWBWinUI::implementation
         if (!service_) return;
         service_->stop_streaming();
         SetStreamingUi(false);
-        AppendLog("Disconnected.");
+        AppendLog(LogTag::Ok, "Disconnected.");
     }
 
     void MainWindow::StartStream(const std::string& mac, const std::string& name, const std::string& logText)
     {
         if (!service_ || isStreaming_) {
-            if (isStreaming_) AppendLog("Disconnect first.");
+            if (isStreaming_) AppendLog(LogTag::Warn, "Disconnect first.");
             return;
         }
 
@@ -436,7 +448,7 @@ namespace winrt::A2DPWBWinUI::implementation
     {
         if (!service_) return;
         if (settings_.last_device_mac.empty()) {
-            AppendLog("No previous device. Connect once via Scan/Direct Connect first.");
+            AppendLog(LogTag::Warn, "No previous device. Connect once via Scan/Direct Connect first.");
             return;
         }
         StartStream(settings_.last_device_mac, settings_.last_device_name, "Reconnecting");
@@ -511,7 +523,7 @@ namespace winrt::A2DPWBWinUI::implementation
     {
         if (driverBusy_) return;
         if (isStreaming_) {
-            AppendLog("Stop streaming before switching the dongle driver.");
+            AppendLog(LogTag::Warn, "Stop streaming before switching the dongle driver.");
             return;
         }
 
@@ -529,10 +541,10 @@ namespace winrt::A2DPWBWinUI::implementation
                 switch (rep.result) {
                 case DongleSwitchResult::Ok:
                 case DongleSwitchResult::NoChange:
-                    AppendLog(std::string(action) + ": " + rep.message);
+                    AppendLog(LogTag::Ok, std::string(action) + ": " + rep.message);
                     break;
                 default:
-                    AppendLog(std::string(action) + " failed: " + rep.message);
+                    AppendLog(LogTag::Error, std::string(action) + " failed: " + rep.message);
                     break;
                 }
                 RefreshDriverMode();
@@ -564,6 +576,18 @@ namespace winrt::A2DPWBWinUI::implementation
         snprintf(buf, sizeof(buf), "Queue: %u  (sends=%llu fails=%llu)", stats.queue_depth,
                  (unsigned long long)stats.total_sends, (unsigned long long)stats.send_fails);
         QueueText().Text(AToW(buf));
+
+        /* Severity highlighting, mirroring the CLI health rows (warn latency > 15 ms,
+         * error/loss above the sparkline's 1 % visibility threshold are red). */
+        LatencyText().Foreground(nullptr);
+        ErrorRateText().Foreground(nullptr);
+        LossRateText().Foreground(nullptr);
+        if (stats.latency_ms > 15.0)
+            LatencyText().Foreground(TagBrush(L"TagWarnBrush"));
+        if (stats.error_rate >= 0.01f)
+            ErrorRateText().Foreground(TagBrush(L"TagErrorBrush"));
+        if (stats.loss_rate >= 0.01f)
+            LossRateText().Foreground(TagBrush(L"TagErrorBrush"));
 
         // Feed history for the sparkline (~120 samples ≈ 4 min at 2 Hz)
         sparkLatency_.push_back(static_cast<float>(stats.latency_ms));
@@ -641,7 +665,7 @@ namespace winrt::A2DPWBWinUI::implementation
             if (hasSelectedDevice_) ConnectButton().IsEnabled(true);
             break;
         }
-        AppendLog("[State] " + text);
+        AppendLog(LogTag::Data, "[State] " + text);
     }
 
     void MainWindow::OnRefreshDriverClick(IInspectable const&, RoutedEventArgs const&)
@@ -678,16 +702,51 @@ namespace winrt::A2DPWBWinUI::implementation
 
         DriverStateText().Text(state);
         DriverDetailText().Text(AToW(detail));
-        AppendLog("[DriverMode] " + detail);
+        AppendLog(LogTag::Data, "[DriverMode] " + detail);
     }
 
     void MainWindow::AppendLog(const std::string& text)
     {
-        auto current = LogText().Text();
-        std::wstring ws(current.c_str(), current.size());
-        if (!ws.empty()) ws += L"\n";
-        ws += AToW(text);
-        LogText().Text(hstring(ws));
-        LogScroller().ScrollToVerticalOffset(LogScroller().ExtentHeight());
+        AppendLog(LogTag::Info, text);
+    }
+
+    void MainWindow::AppendLog(LogTag tag, const std::string& text)
+    {
+        Microsoft::UI::Xaml::Media::SolidColorBrush brush{ nullptr };
+        switch (tag) {
+        case LogTag::Ok:    brush = TagBrush(L"TagOkBrush");    break;
+        case LogTag::Warn:  brush = TagBrush(L"TagWarnBrush");  break;
+        case LogTag::Error: brush = TagBrush(L"TagErrorBrush"); break;
+        case LogTag::Data:  brush = TagBrush(L"TagDataBrush");  break;
+        default:            break;
+        }
+        AppendLogLine(std::wstring(AToW(text).c_str()), brush);
+    }
+
+    void MainWindow::AppendLogLine(const std::wstring& text,
+                                   const Microsoft::UI::Xaml::Media::SolidColorBrush& brush)
+    {
+        using namespace Microsoft::UI::Xaml::Controls;
+
+        /* One TextBlock per log line. Whole-line severity tint mirrors the CLI tag
+         * language; the mono log style comes from App.xaml (MonoLogTextStyle). */
+        TextBlock line;
+        line.Text(hstring(text));
+        if (brush) line.Foreground(brush);
+        try {
+            auto resources = Application::Current().Resources();
+            auto styleValue = resources.TryLookup(winrt::box_value(L"MonoLogTextStyle"));
+            if (styleValue) line.Style(styleValue.as<Microsoft::UI::Xaml::Style>());
+        } catch (...) {}
+
+        auto children = LogLines().Children();
+        children.Append(line);
+        while (children.Size() > kMaxLogLines) children.RemoveAt(0);
+
+        /* Scroll after layout settles so the newest line is visible. */
+        dispatcher_.TryEnqueue([this] {
+            auto scrollable = LogScroller().ScrollableHeight();
+            LogScroller().ScrollToVerticalOffset(scrollable);
+        });
     }
 }

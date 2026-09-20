@@ -7,6 +7,10 @@
 
 namespace winrt::A2DPWBWinUI::implementation
 {
+    /* Severity tags matching the CLI tag language (INFO/OK/WARN/ERROR/DATA,
+     * docs/dev/PLAN_DESIGN_CONSISTENCY.md Faz A/C). Drove the log-pane colors. */
+    enum class LogTag { Info, Ok, Warn, Error, Data };
+
     struct MainWindow : MainWindowT<MainWindow>
     {
         MainWindow();
@@ -39,6 +43,10 @@ namespace winrt::A2DPWBWinUI::implementation
 
         void UpdateUI(const A2dpService::State& state, const std::string& text);
         void AppendLog(const std::string& text);
+        void AppendLog(LogTag tag, const std::string& text);
+        void AppendLogLine(const std::wstring& text,
+                           const Microsoft::UI::Xaml::Media::SolidColorBrush& brush);
+        static constexpr size_t kMaxLogLines = 500;
         void RefreshDriverMode();
         void UpdateBitDepthForCodec();
         void ApplyBitrateSnap(int requestedKbps);

@@ -9,7 +9,14 @@
 #include <wx/colour.h>
 #include <string>
 
-/* Semantic color roles used throughout the application */
+/* Severity/tag parity with the CLI tag language (PLAN_DESIGN_CONSISTENCY Faz A/C):
+ *   INFO  -> TextPrimary / TextSecondary (default)
+ *   OK    -> StatusStreaming, FirmwareOk
+ *   WARN  -> StatusConnecting / StatusReconnecting, FirmwareWarning
+ *   ERROR -> StatusError, ErrorText
+ *   DATA  -> TextStreamInfo, TextMuted
+ * The wx palette already expresses this mapping (same language, not a byte-for-byte
+ * copy); the WinUI GUI resolves the same tags from App.xaml Tag*Brush tokens. */
 enum class ThemeColor {
     /* Window / panel backgrounds */
     WindowBg,

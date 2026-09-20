@@ -9,6 +9,57 @@
             <ResourceDictionary.MergedDictionaries>
                 <XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
             </ResourceDictionary.MergedDictionaries>
+
+            <!--
+              Design tokens (docs/dev/PLAN_DESIGN_CONSISTENCY.md, Faz C).
+              Severity brushes are fixed (theme-agnostic) colors mirroring the CLI ANSI
+              palette: INFO (default) | OK (green) | WARN (amber) | ERROR (red) | DATA (cyan).
+              Texture/text-level tokens switch per theme via ThemeDictionaries.
+            -->
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="SubtleTextBrush" Color="#717171" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="SubtleTextBrush" Color="#9E9E9E" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+
+            <SolidColorBrush x:Key="TagOkBrush"    Color="#3FB950" />
+            <SolidColorBrush x:Key="TagWarnBrush"  Color="#D29922" />
+            <SolidColorBrush x:Key="TagErrorBrush" Color="#F85149" />
+            <SolidColorBrush x:Key="TagDataBrush"  Color="#39B9D2" />
+
+            <!-- Typography scale (Faz B/C) -->
+            <Style x:Key="SectionLabelTextStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+            </Style>
+            <Style x:Key="CaptionGrayTextStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Foreground" Value="{ThemeResource SubtleTextBrush}" />
+            </Style>
+            <Style x:Key="HintGrayTextStyle" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="11" />
+                <Setter Property="Foreground" Value="{ThemeResource SubtleTextBrush}" />
+            </Style>
+            <Style x:Key="StatsValueTextStyle" TargetType="TextBlock">
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="Typography.NumeralAlignment" Value="Tabular" />
+            </Style>
+            <Style x:Key="MonoLogTextStyle" TargetType="TextBlock">
+                <Setter Property="FontFamily" Value="Cascadia Mono,Consolas" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="LineHeight" Value="16" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+            </Style>
+
+            <!-- Control consistency (uniform height / min-width / padding) -->
+            <Style x:Key="AppButtonStyle" TargetType="Button">
+                <Setter Property="MinHeight" Value="32" />
+                <Setter Property="MinWidth" Value="96" />
+                <Setter Property="Padding" Value="12,6" />
+            </Style>
         </ResourceDictionary>
     </Application.Resources>
 </Application>

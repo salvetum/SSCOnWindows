@@ -52,17 +52,17 @@ Title="SSC On Windows"
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
                         HorizontalAlignment="Right" VerticalAlignment="Center">
-                <Button x:Name="ScanButton" Content="Scan Devices" Click="OnScanClick" />
-                <Button x:Name="ConnectButton" Content="Connect" IsEnabled="False" Click="OnConnectClick" />
-                <Button x:Name="DirectConnectButton" Content="Direct Connect" Click="OnDirectConnectClick" />
-                <Button x:Name="ReconnectLastButton" Content="Reconnect Last" IsEnabled="False" Click="OnReconnectLastClick" />
-                <Button x:Name="ClearButton" Content="Clear Log" Click="OnClearLogClick" />
-                <Button x:Name="SetupButton" Content="Setup &amp; Help" Click="OnSetupClick" />
+<Button x:Name="ScanButton" Content="Scan Devices" Style="{StaticResource AppButtonStyle}" Click="OnScanClick" />
+                <Button x:Name="ConnectButton" Content="Connect" IsEnabled="False" Style="{StaticResource AppButtonStyle}" Click="OnConnectClick" />
+                <Button x:Name="DirectConnectButton" Content="Direct Connect" Style="{StaticResource AppButtonStyle}" Click="OnDirectConnectClick" />
+                <Button x:Name="ReconnectLastButton" Content="Reconnect Last" IsEnabled="False" Style="{StaticResource AppButtonStyle}" Click="OnReconnectLastClick" />
+                <Button x:Name="ClearButton" Content="Clear Log" Style="{StaticResource AppButtonStyle}" Click="OnClearLogClick" />
+                <Button x:Name="SetupButton" Content="Setup &amp; Help" Style="{StaticResource AppButtonStyle}" Click="OnSetupClick" />
             </StackPanel>
         </Grid>
 
         <!-- ===================== Status ===================== -->
-        <Border Grid.Row="1" Padding="10,4" CornerRadius="4"
+        <Border Grid.Row="1" Padding="12,4" CornerRadius="4"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
             <TextBlock x:Name="StatusText" Text="Ready" Foreground="Gray" />
         </Border>
@@ -102,8 +102,8 @@ Title="SSC On Windows"
                                          Text="78:C1:1D:A7:BC:EE"
                                          PlaceholderText="XX:XX:XX:XX:XX:XX" />
                             </StackPanel>
-                            <TextBlock Text="Enter a known device address, then press 'Direct Connect' (header)."
-                                       Foreground="Gray" FontSize="11" TextWrapping="Wrap" />
+<TextBlock Text="Enter a known device address, then press 'Direct Connect' (header)."
+                                       Style="{StaticResource HintGrayTextStyle}" TextWrapping="Wrap" />
                         </StackPanel>
                     </Expander>
 
@@ -148,8 +148,8 @@ Title="SSC On Windows"
                                     <ComboBoxItem Content="24-bit" />
                                     <ComboBoxItem Content="32-bit" />
                                 </ComboBox>
-                                <TextBlock x:Name="BitDepthHintText" Text="" Foreground="Gray"
-                                           FontSize="11" VerticalAlignment="Center" />
+<TextBlock x:Name="BitDepthHintText" Text="" Style="{StaticResource HintGrayTextStyle}"
+                                           VerticalAlignment="Center" />
                             </StackPanel>
 
                             <StackPanel Spacing="4">
@@ -158,8 +158,8 @@ Title="SSC On Windows"
 <TextBlock x:Name="BitrateValueText" Text="auto"
                                                VerticalAlignment="Center" FontWeight="SemiBold"
                                                Typography.NumeralAlignment="Tabular" />
-                                    <TextBlock Text="(0 = auto)" VerticalAlignment="Center"
-                                               Foreground="Gray" FontSize="12" />
+<TextBlock Text="(0 = auto)" Style="{StaticResource CaptionGrayTextStyle}"
+                                               VerticalAlignment="Center" />
                                 </StackPanel>
                                 <Slider x:Name="BitrateSlider" Minimum="0" Maximum="990"
                                         StepFrequency="1" Value="0" Width="340"
@@ -202,8 +202,8 @@ Title="SSC On Windows"
                                 <Button x:Name="RefreshDriverButton" Content="Refresh"
                                         Click="OnRefreshDriverClick" VerticalAlignment="Center" />
                             </StackPanel>
-                            <TextBlock x:Name="DriverDetailText" Text="" Foreground="Gray"
-                                       FontSize="12" TextWrapping="Wrap" />
+<TextBlock x:Name="DriverDetailText" Text="" Style="{StaticResource CaptionGrayTextStyle}"
+                                       TextWrapping="Wrap" />
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <Button x:Name="EnableStreamingButton"
                                         Content="Enable Streaming (WinUSB)"
@@ -212,8 +212,8 @@ Title="SSC On Windows"
                                         Content="Restore Windows BT (BTHUSB)"
                                         Click="OnRestoreBtClick" />
                             </StackPanel>
-                            <TextBlock Text="A UAC prompt runs pnputil; stop streaming before switching."
-                                       Foreground="Gray" FontSize="11" TextWrapping="Wrap" />
+<TextBlock Text="A UAC prompt runs pnputil; stop streaming before switching."
+                                       Style="{StaticResource HintGrayTextStyle}" TextWrapping="Wrap" />
                         </StackPanel>
                     </Expander>
 
@@ -224,7 +224,7 @@ Title="SSC On Windows"
                             <TextBlock x:Name="BitrateText" Text="Bitrate: ---" Typography.NumeralAlignment="Tabular" />
                             <TextBlock x:Name="SampleRateText" Text="Sample Rate: ---" Typography.NumeralAlignment="Tabular" />
                             <TextBlock x:Name="ChannelsText" Text="Channels: ---" Typography.NumeralAlignment="Tabular" />
-                            <TextBlock x:Name="SourceInfoText" Text="Source: ---" Foreground="Gray" FontSize="12" />
+                            <TextBlock x:Name="SourceInfoText" Text="Source: ---" Style="{StaticResource CaptionGrayTextStyle}" />
                         </StackPanel>
                     </Expander>
 
@@ -232,11 +232,11 @@ Title="SSC On Windows"
                     <Expander Header="Live Stats">
                         <StackPanel Spacing="8" Margin="0,8,0,0">
                             <StackPanel Orientation="Horizontal" Spacing="16">
-<TextBlock x:Name="LatencyText" Text="Latency: ---" Typography.NumeralAlignment="Tabular" />
-                                <TextBlock x:Name="ErrorRateText" Text="Error Rate: ---" Typography.NumeralAlignment="Tabular" />
-                                <TextBlock x:Name="LossRateText" Text="Loss Rate: ---" Typography.NumeralAlignment="Tabular" />
+<TextBlock x:Name="LatencyText" Text="Latency: ---" Style="{StaticResource StatsValueTextStyle}" />
+                                <TextBlock x:Name="ErrorRateText" Text="Error Rate: ---" Style="{StaticResource StatsValueTextStyle}" />
+                                <TextBlock x:Name="LossRateText" Text="Loss Rate: ---" Style="{StaticResource StatsValueTextStyle}" />
                             </StackPanel>
-                            <TextBlock x:Name="QueueText" Text="Queue: ---" Foreground="Gray" FontSize="12"
+                            <TextBlock x:Name="QueueText" Text="Queue: ---" Style="{StaticResource CaptionGrayTextStyle}"
                                        Typography.NumeralAlignment="Tabular" />
                             <Border Height="56" Padding="4"
                                     Background="#15FFFFFF"
@@ -249,8 +249,9 @@ Title="SSC On Windows"
                                               StrokeThickness="1.5" />
                                 </Grid>
                             </Border>
-                            <TextBlock x:Name="SparklineCaption" Text="Latency / Error history"
-                                       Foreground="Gray" FontSize="11" />
+<TextBlock x:Name="SparklineCaption"
+                                       Text="Latency (0&#8211;25 ms) / Error (0&#8211;5 %)"
+                                       Style="{StaticResource HintGrayTextStyle}" />
                         </StackPanel>
                     </Expander>
                 </StackPanel>
@@ -262,9 +263,8 @@ Title="SSC On Windows"
                 BorderBrush="{ThemeResource SystemControlForegroundBaseMediumBrush}"
                 BorderThickness="1" CornerRadius="4"
                 Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-            <ScrollViewer x:Name="LogScroller" VerticalScrollBarVisibility="Auto">
-<TextBlock x:Name="LogText" Text="Ready" FontFamily="Cascadia Mono,Consolas"
-                           FontSize="12" LineHeight="16" TextWrapping="Wrap" />
+<ScrollViewer x:Name="LogScroller" VerticalScrollBarVisibility="Auto">
+                <StackPanel x:Name="LogLines" />
             </ScrollViewer>
         </Border>
     </Grid>
