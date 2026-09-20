@@ -12,7 +12,7 @@
 | 1 | Depo Hijyeni ve Lisans Uyumu | ✅ 44a3327 (gitignore + pre-commit + setup -BlobFrom + CONTRIBUTING) |
 | 2 | CI/CD | ✅ 96ea97a (build/lint/golden/release workflow'ları; vcxproj portability) |
 | 3 | Kurulum Otomasyonu | ✅ yerelde parse + dry-run doğrulandı (committed) |
-| 4 | Kod Kalitesi ve Test Kapsamı | ⏳ sıradaki |
+| 4 | Kod Kalitesi ve Test Kapsamı | ✅ `codec_policy.h` + doctest unit/integration testler + daemon `CMD_SHUTDOWN` |
 | 5 | Dokümantasyon ve Sürümleme | ⏳ |
 | 6 | Kapalı Kaynak SSC Bağımlılığı | ⏳ 6a öncelikli (denetim Faz 6a'ya ağırlık verdi) |
 | 7 | Topluluk ve Sürdürülebilirlik | ⏳ |
@@ -86,6 +86,30 @@ committed ise Faz 6'nın "acil temizlik" alt maddesi öncelik kazanır.
 - A2DP/AVDTP negotiation için mock BTstack transport ile integration testleri.
 - Daemon graceful-shutdown sorunu (SIGTERM'de kapanmama) için: TCP protokolüne
   açık bir `CMD_SHUTDOWN` mesajı ekle, watchdog yerine düzgün kapanma sağla.
+
+### Uygulandı (2026-09-20)
+
+- **`app/src/codec_policy.h`**: saf (I/O'suz) karar yardımcıları — `Caps`,
+  `resolve_codec` (SSC>AAC>SBC fallback), `snap_bitrate_bps` (48k basic /
+  96k UHQ mode-gated setler, 229/328/442/584 vd.), `pick_bitrate_bps`,
+  `resolve_encode_sr` (UHQ 0x02 capability gate + fell_back bayrağı),
+  `resolve_stream` (uçtan uca). `ssc_encoder.cpp`, `main.cpp`,
+  `a2dp_service.cpp` bunlara delege edecek şekilde refactor edildi (kod
+  kopyası kaldırıldı, davranış korundu — golden regression 6/6 PASS).
+- **doctest test süiti**: `tests/` (harness `a2dpwb_tests`, `a2dpwb_core`'a
+  bağlanmaz — hermetic). `unit/codec_policy_tests.cpp` 14 test case / 83
+  assertion; `integration/negotiation_tests.cpp` MockTransport ile
+  negotiation kararını sınar (gerçek btstack run-loop seviyesinde event
+  mock'u büyük transport refactor'ü gerektirirdi — sınır belgelendi).
+  CMake: `enable_testing()` + `add_test`, CI `build.yml`'de her config'de
+  `a2dpwb_tests` build + `ctest` çalışır.
+- **Daemon `CMD_SHUTDOWN`**: TCP protokolüne 4-byte magic
+  (`0x44434853`, LE 'S','H','C','D') eklendi. `sscblobd.c` (WSL) ve
+  `sscblobd.py` (Qiling) client'ın frame_samples header'ında bu değeri
+  görmesiyle temiz çıkıyor; `SscEncoder::shutdown()` artık socket'i
+  kapatmadan önce `request_shutdown()` ile magic gönderiyor. Watchdog
+  (`recover`) crash/bağlantı-kopma yolları için korunuyor. Her iki daemon
+  üzerinde canlı smoke test doğrulandı.
 
 ## Faz 5 — Dokümantasyon ve Sürümleme
 

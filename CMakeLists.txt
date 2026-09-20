@@ -139,3 +139,7 @@ endif()
 
 # --- User-mode application ---
 add_subdirectory(app)
+
+# --- Tests (doctest; unit + negotiation policy) ---
+enable_testing()
+add_subdirectory(tests)

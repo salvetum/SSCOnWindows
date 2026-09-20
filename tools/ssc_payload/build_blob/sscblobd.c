@@ -6,11 +6,15 @@
  * PCM -> SSC in near real-time without spawning a process per frame.
  *
  * Protocol (all little-endian, one connection at a time):
- *   client -> server: uint32 frame_samples, then frame_samples*channels*2 bytes int16 PCM
+ *   client -> server: uint32 frame_samples, then frame_samples*channels*4 bytes int32 PCM
  *   server -> client: int32 ret, then ret bytes of encoded SSC frame
  *
- * The int16 PCM is converted to int32 (<<14) exactly like openssc's
- * sscenc_encode_s16 does before handing it to the blob helper.
+ * The int32 PCM is passed straight to the helper (24-bit, 2^29 scale) — the
+ * old int16 (<<14) down-conversion was removed because it raised the
+ * quantization noise floor (audible crackle at low volumes).
+ *
+ * The client may also send the magic value CMD_SHUTDOWN as the frame_samples
+ * header to make the daemon exit cleanly (no further bytes follow).
  *
  * Usage: sscblobd <port> <sample-rate> <channels> <bitrate> [helper-path]
  */
@@ -43,6 +47,10 @@
 #define DEFAULT_BLOB "/home/kaan5/ssc/blob/libScalable_Encoder.so"
 #define SYSROOT "/usr/aarch64-linux-gnu"
 #define SHIMDIR "/home/kaan5/ssc/openssc/build_blob"
+
+/* Client-originated clean exit: send this (LE, bytes 'S''H''C''D') as the
+ * frame_samples header and the daemon stops serving and exits. */
+#define CMD_SHUTDOWN 0x44434853u
 
 static int g_stop = 0;
 
@@ -157,6 +165,11 @@ static int service_client(int client_fd, const char *helper_path, int sample_rat
         uint32_t frame_samples = 0;
         if (read_full(client_fd, &frame_samples, sizeof(frame_samples)) < 0)
             break; /* client closed */
+        if (frame_samples == CMD_SHUTDOWN) {
+            fprintf(stderr, "sscblobd: CMD_SHUTDOWN received, exiting\n");
+            g_stop = 1;
+            break;
+        }
         if (frame_samples == 0 || frame_samples > MAX_FRAME_SAMPLES) {
             fprintf(stderr, "sscblobd: bad frame_samples=%u\n", frame_samples);
             break;

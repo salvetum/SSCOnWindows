@@ -63,6 +63,10 @@ public:
     void shutdown() override;
 
 private:
+    /* Send the wire-protocol CMD_SHUTDOWN magic so the daemon exits cleanly
+     * instead of the client just dropping the socket. Best effort. */
+    void request_shutdown();
+
     /* Pick a bitrate for the given sample rate + quality. */
     uint32_t pick_bitrate(EncoderQuality quality, uint32_t sample_rate) const;
 

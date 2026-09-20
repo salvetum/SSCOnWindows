@@ -17,6 +17,7 @@
 #include "a2dp_sbc_encoder.h"
 #include "aac_encoder.h"
 #include "ssc_encoder.h"
+#include "codec_policy.h"
 #include "bt_device.h"
 #include "localization.h"
 #include "resampler.h"
@@ -1102,30 +1103,20 @@ void A2dpService::streaming_thread_func_inner() {
     if (stop_requested_.load()) { transport->disconnect(); running_.store(false); notify_state(State::Idle, L("status.ready")); return; }
 
     /* Select codec: honour the requested codec, else fall back to the
-     * priority order SSC > AAC > SBC. */
-    auto caps = transport->get_remote_caps();
+     * priority order SSC > AAC > SBC (shared policy, codec_policy.h). */
+    auto raw_caps = transport->get_remote_caps();
+    codec_policy::Caps caps{ raw_caps.sbc, raw_caps.aac, raw_caps.ssc,
+                             raw_caps.ssc_cap, raw_caps.ssc_uhq };
     AudioCodec selected_codec = requested_codec;
-    bool found = false;
-
-    switch (requested_codec) {
-    case AudioCodec::SSC: found = caps.ssc; break;
-    case AudioCodec::AAC: found = caps.aac; break;
-    case AudioCodec::SBC: found = caps.sbc; break;
-    }
-    if (!found) {
-        if (caps.ssc)        { selected_codec = AudioCodec::SSC; found = true; }
-        else if (caps.aac)   { selected_codec = AudioCodec::AAC; found = true; }
-        else if (caps.sbc)   { selected_codec = AudioCodec::SBC; found = true; }
-        if (found) {
-            LOG_INFO("A2dpService: requested codec %s unavailable — falling back to %s",
-                     codec_name_for(requested_codec), codec_name_for(selected_codec));
-        }
-    }
-    if (!found) {
+    if (!codec_policy::resolve_codec(requested_codec, caps, &selected_codec)) {
         notify_state(State::Error, L("error.no_compatible_codec"));
         transport->disconnect();
         running_.store(false);
         return;
+    }
+    if (selected_codec != requested_codec) {
+        LOG_INFO("A2dpService: requested codec %s unavailable — falling back to %s",
+                 codec_name_for(requested_codec), codec_name_for(selected_codec));
     }
 
     g_ctx.active_codec = selected_codec;
@@ -1196,25 +1187,28 @@ void A2dpService::streaming_thread_func_inner() {
     LOG_INFO("A2dpService: WASAPI capture init OK (sr=%u ch=%u use_ch=%u)", sr, ch, use_ch);
 
     /* Determine encode sample rate: for SSC UHQ, encode at 96 kHz even if
-     * WASAPI only captures at 48 kHz.  The encode thread will apply 2x SRC. */
+     * WASAPI only captures at 48 kHz.  The encode thread will apply 2x SRC.
+     * A device without the UHQ2 (0x02) capability bit cannot decode 96 kHz
+     * (silence), so fall back to 48 kHz (shared policy, codec_policy.h). */
     uint32_t encode_sr = sr;
     if (selected_codec == AudioCodec::SSC && sr == 48000 &&
         (p.sample_rate == 88200 || p.sample_rate == 96000)) {
-        const auto &rc = transport->get_remote_caps();
-        if (rc.ssc_uhq) {
-            encode_sr = p.sample_rate;
-            LOG_INFO("A2dpService: SSC UHQ encode_sr=%u (WASAPI capture %u Hz, 2x SRC)",
-                     encode_sr, sr);
-        } else {
+        bool uhq_fell_back = false;
+        encode_sr = codec_policy::resolve_encode_sr(
+            selected_codec, sr, p.sample_rate, caps, &uhq_fell_back);
+        if (uhq_fell_back) {
             /* Device does not advertise the SSC UHQ (0x02) bit — it cannot
              * decode 96 kHz, so sending it yields silence. Fall back to 48 kHz. */
             char msg[192];
             char caphex[8];
-            snprintf(caphex, sizeof(caphex), "%02X", rc.ssc_cap);
+            snprintf(caphex, sizeof(caphex), "%02X", raw_caps.ssc_cap);
             snprintf(msg, sizeof(msg), L("status.ssc_uhq_fallback"), caphex);
             notify_state(State::Connecting, msg);
             LOG_INFO("A2dpService: SSC UHQ unsupported (remote cap=0x%02X) — falling back to 48 kHz",
-                     rc.ssc_cap);
+                     raw_caps.ssc_cap);
+        } else {
+            LOG_INFO("A2dpService: SSC UHQ encode_sr=%u (WASAPI capture %u Hz, 2x SRC)",
+                     encode_sr, sr);
         }
     }
     g_ctx.encode_sample_rate = encode_sr;

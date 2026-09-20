@@ -12,6 +12,11 @@ Wire protocol is identical to the WSL daemon (matches app/src/ssc_encoder.cpp):
                     of int32 PCM (24-bit, 2^29 scale)
   daemon -> client: int32 ret, then ret bytes of the encoded SSC frame
 
+Graceful shutdown: the client sends the magic value CMD_SHUTDOWN
+(0x44434853, bytes 'S''H''C''D') as the frame_samples header and the daemon
+exits cleanly (no further bytes follow) instead of hanging on SIGTERM while a
+client is connected.
+
 CLI is the same shape as the C daemon:
   sscblobd.py <port> <sample-rate> <channels> <bitrate> [helper-path-prefix]
 
@@ -40,6 +45,10 @@ BLOB = "/blob/libScalable_Encoder.so"
 
 MAX_FRAME_SAMPLES = 16384
 MAX_ENCODE_BYTES = 4096
+
+# Client-originated clean exit: send this (LE, bytes 'S''H''C''D') as the
+# frame_samples header and the daemon stops serving and exits.
+CMD_SHUTDOWN = 0x44434853
 
 
 class HelperBridge:
@@ -137,7 +146,10 @@ def run_daemon(port, sample_rate, channels, bitrate):
         conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
         print("sscblobd(py): client connected", flush=True)
         try:
-            service_client(conn, sample_rate, channels, bitrate)
+            if service_client(conn, sample_rate, channels, bitrate):
+                print("sscblobd(py): CMD_SHUTDOWN received, exiting", flush=True)
+                srv.close()
+                return
         except Exception as e:
             print(f"sscblobd(py): client error: {type(e).__name__}: {e}",
                   file=sys.stderr, flush=True)
@@ -154,6 +166,8 @@ def service_client(conn, sample_rate, channels, bitrate):
             if head is None:
                 break
             (frame_samples,) = struct.unpack("<I", head)
+            if frame_samples == CMD_SHUTDOWN:
+                return True
             if frame_samples == 0 or frame_samples > MAX_FRAME_SAMPLES:
                 print(f"sscblobd(py): bad frame_samples={frame_samples}",
                       file=sys.stderr)
@@ -166,6 +180,7 @@ def service_client(conn, sample_rate, channels, bitrate):
             conn.sendall(struct.pack("<i", len(payload)) + payload)
     finally:
         bridge.close()
+    return False
 
 
 def recv_exact(conn, n):

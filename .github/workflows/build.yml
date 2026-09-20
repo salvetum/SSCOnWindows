@@ -60,6 +60,11 @@ jobs:
       - name: Build a2dpwb_core
         shell: pwsh
         run: cmake --build build_msvc --config ${{ matrix.config }} --target a2dpwb_core -j 2
+      - name: Build + run unit tests (doctest)
+        shell: pwsh
+        run: |
+          cmake --build build_msvc --config ${{ matrix.config }} --target a2dpwb_tests -j 2
+          ctest --test-dir build_msvc -C ${{ matrix.config }} --output-on-failure
       - uses: actions/upload-artifact@v4
         with:
           name: a2dpwb_core-${{ matrix.config }}

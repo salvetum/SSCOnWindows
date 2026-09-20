@@ -5,6 +5,7 @@
  */
 
 #include "ssc_encoder.h"
+#include "codec_policy.h"
 #include "console_style.h"
 
 #include <cstdio>
@@ -27,39 +28,14 @@ constexpr const char *kDaemonScript =
     "/home/kaan5/ssc/bin/start_sscblobd";
 constexpr uint32_t kFrameSamples = 864;
 constexpr uint32_t kMaxEncodeBytes = 4096;
+/* Wire-protocol magic (LE bytes 'S''H''C''D') the client sends as the
+ * frame_samples header to make the daemon exit cleanly. */
+constexpr uint32_t kCmdShutdown = 0x44434853u;
 constexpr uint64_t kRecoveryCooldownMs = 5000;
 
-/* SSC bitrates are gated by the A2DP capability mode (see openssc
- * pipewire/a2dp-codec-ssc.c). At 48 kHz we advertise SSC_CAP_BASIC_48K (0x0C),
- * which only permits the "basic" set below; the UHQ bitrates (152/250/291/308/
- * 442/584/886) require the UHQ2 (0x02) capability bit, which the Buds3 FE does
- * not advertise (remote cap=0x3C). Feeding any other value to the blob makes it
- * emit a malformed frame -> garbled audio, so requests are snapped here.
- * Keep each list sorted ascending. */
-const uint32_t kBasicBitratesBps[] = {
-    88000, 96000, 128000, 192000, 229000, 256000, 328000,
-};
-const uint32_t kUhqBitratesBps[] = {
-    152000, 250000, 291000, 308000, 442000, 584000, 886000,
-};
-
-uint32_t snap_bitrate_bps(uint32_t bps, uint32_t sample_rate) {
-    bool uhq = (sample_rate == 88200 || sample_rate == 96000);
-    const uint32_t *list = uhq ? kUhqBitratesBps : kBasicBitratesBps;
-    const size_t n = uhq ? (sizeof(kUhqBitratesBps) / sizeof(kUhqBitratesBps[0]))
-                         : (sizeof(kBasicBitratesBps) / sizeof(kBasicBitratesBps[0]));
-    uint32_t best = list[0];
-    uint32_t best_diff = (bps > best) ? (bps - best) : (best - bps);
-    for (size_t i = 1; i < n; ++i) {
-        uint32_t cand = list[i];
-        uint32_t diff = (bps > cand) ? (bps - cand) : (cand - bps);
-        if (diff < best_diff) {
-            best_diff = diff;
-            best = cand;
-        }
-    }
-    return best;
-}
+/* SSC bitrate mode-gating, auto bitrate pick, and core decision helpers now
+ * live in codec_policy.h (shared with the CLI/service and unit-tested in
+ * tests/unit/codec_policy_tests.cpp). This file only wraps the encoder API. */
 
 std::string trim(const std::string &s) {
     size_t a = s.find_first_not_of(" \t\r\n");
@@ -77,21 +53,12 @@ SscEncoder::~SscEncoder() {
 }
 
 uint32_t SscEncoder::pick_bitrate(EncoderQuality quality, uint32_t sample_rate) const {
-    bool uhq = (sample_rate == 88200 || sample_rate == 96000);
-    switch (quality) {
-    case EncoderQuality::High:
-        return uhq ? 584000 : 229000;   /* UHQ high / SSC 229k */
-    case EncoderQuality::Standard:
-        return uhq ? 442000 : 192000;   /* UHQ std / SSC 192k */
-    case EncoderQuality::Mobile:
-    default:
-        return uhq ? 250000 : 128000;   /* UHQ low / SSC 128k */
-    }
+    return codec_policy::pick_bitrate_bps(quality, sample_rate);
 }
 
 uint32_t SscEncoder::snap_bitrate_kbps(uint32_t kbps, uint32_t sample_rate) {
     if (kbps == 0) return 0;            /* 0 = auto, leave untouched */
-    return snap_bitrate_bps(kbps * 1000, sample_rate) / 1000;
+    return codec_policy::snap_bitrate_bps(kbps * 1000, sample_rate) / 1000;
 }
 
 std::string SscEncoder::run_wsl(const std::string &args) {
@@ -328,7 +295,7 @@ bool SscEncoder::init(uint16_t mtu, EncoderQuality quality,
     uint32_t br;
     if (bitrate_override_kbps_ > 0) {
         uint32_t req = bitrate_override_kbps_ * 1000;
-        br = snap_bitrate_bps(req, rate);
+        br = codec_policy::snap_bitrate_bps(req, rate);
         if (br != req) {
             fprintf(stderr,
                     "SSC: bitrate %u bps not valid for %u Hz (mode-gated); "
@@ -431,8 +398,20 @@ bool SscEncoder::encode(const uint8_t *pcm_data, uint32_t pcm_bytes,
     return true;
 }
 
+void SscEncoder::request_shutdown() {
+#ifdef _WIN32
+    /* Only when a session is actually up; the daemons treat this as a clean
+     * exit (see CMD_SHUTDOWN in sscblobd.c / CMD_SHUTDOWN in sscblobd.py). */
+    if (sock_ != INVALID_SOCKET && connected_) {
+        uint32_t magic = kCmdShutdown;
+        (void)send(sock_, reinterpret_cast<const char *>(&magic), 4, 0);
+    }
+#endif
+}
+
 void SscEncoder::shutdown() {
 #ifdef _WIN32
+    request_shutdown();
     if (sock_ != INVALID_SOCKET) {
         closesocket(sock_);
         sock_ = INVALID_SOCKET;

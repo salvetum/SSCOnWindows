@@ -32,6 +32,7 @@
 #include "a2dp_sbc_encoder.h"
 #include "aac_encoder.h"
 #include "ssc_encoder.h"
+#include "codec_policy.h"
 #include "bt_device.h"
 #include "btstack_transport.h"
 #include "bt_adapter_enum.h"
@@ -503,26 +504,20 @@ static const char *codec_name_str(AudioCodec codec) {
 }
 
 /*
- * Select best codec from BTstack remote capabilities.
+ * Select best codec from BTstack remote capabilities (shared policy in
+ * codec_policy.h: requested codec honored, else SSC > AAC > SBC).
  * Returns true if a compatible codec was found.
  */
 static bool find_best_btstack_codec(const BtStackTransport::RemoteCodecCaps &caps,
                                      AudioCodec requested_codec,
                                      AudioCodec *selected_codec) {
-    switch (requested_codec) {
-    case AudioCodec::SBC: if (caps.sbc) { *selected_codec = AudioCodec::SBC; return true; } break;
-    case AudioCodec::AAC: if (caps.aac) { *selected_codec = AudioCodec::AAC; return true; } break;
-    case AudioCodec::SSC: if (caps.ssc) { *selected_codec = AudioCodec::SSC; return true; } break;
+    codec_policy::Caps cc{ caps.sbc, caps.aac, caps.ssc, caps.ssc_cap, caps.ssc_uhq };
+    if (!codec_policy::resolve_codec(requested_codec, cc, selected_codec)) return false;
+    if (*selected_codec != requested_codec) {
+        printf("Requested codec %s not available, falling back to %s...\n",
+               codec_name_str(requested_codec), codec_name_str(*selected_codec));
     }
-    printf("Requested codec %s not available, falling back...\n",
-           codec_name_str(requested_codec));
-
-    /* Priority: SSC > AAC > SBC */
-    if (caps.ssc) { *selected_codec = AudioCodec::SSC; return true; }
-    if (caps.aac) { *selected_codec = AudioCodec::AAC; return true; }
-    if (caps.sbc) { *selected_codec = AudioCodec::SBC; return true; }
-
-    return false;
+    return true;
 }
 
 /* ======================================================================== */
@@ -650,19 +645,24 @@ static int run_streaming(const uint8_t target_addr[6],
     uint32_t channels = wasapi_capture.get_channels();
 
     /* Determine encode sample rate: for SSC UHQ, encode at 96 kHz even if
-     * WASAPI only captures at 48 kHz.  The audio callback applies 2x SRC. */
+     * WASAPI only captures at 48 kHz.  The audio callback applies 2x SRC.
+     * A device without the UHQ2 (0x02) capability bit cannot decode 96 kHz
+     * (silence), so fall back to 48 kHz (shared policy, codec_policy.h). */
     uint32_t encode_sr = sample_rate;
     if (selected_codec == AudioCodec::SSC && sample_rate == 48000 && uhq) {
         const auto &rc = transport.get_remote_caps();
-        if (rc.ssc_uhq) {
-            encode_sr = 96000;
-            cstyle::fprint(stderr, cstyle::Tag::Data,
-                           "\n*** SSC UHQ: encode at 96 kHz (WASAPI capture 48 kHz, 2x SRC) ***\n");
-        } else {
+        codec_policy::Caps cc{ rc.sbc, rc.aac, rc.ssc, rc.ssc_cap, rc.ssc_uhq };
+        bool fell_back = false;
+        encode_sr = codec_policy::resolve_encode_sr(selected_codec, sample_rate,
+                                                    96000, cc, &fell_back);
+        if (fell_back) {
             cstyle::fprint(stderr, cstyle::Tag::Warn,
                     "\n*** SSC UHQ unavailable: remote SSC cap=0x%02X has no UHQ(0x02) bit. ***\n"
                     "*** Falling back to 48 kHz SSC — device does not decode 96 kHz. ***\n",
                     rc.ssc_cap);
+        } else {
+            cstyle::fprint(stderr, cstyle::Tag::Data,
+                           "\n*** SSC UHQ: encode at 96 kHz (WASAPI capture 48 kHz, 2x SRC) ***\n");
         }
     }
     g_encode_sample_rate = encode_sr;
