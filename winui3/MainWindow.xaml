@@ -36,7 +36,7 @@
             <StackPanel Grid.Column="0" VerticalAlignment="Center">
                 <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="SSC On Windows" />
                 <TextBlock x:Name="VersionCreditText" Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"
-                           Text="v0.1 &#183; by Salvetum" />
+                           Text="v0.1.1 &#183; by Salvetum" />
             </StackPanel>
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"

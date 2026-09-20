@@ -57,7 +57,7 @@ L2CAP, AVDTP, A2DP and AVRCP in user mode.
 ## Module Structure
 
 ```
-SSCOnWindows.exe (WinUI 3)  /  SSCOnWindows-0.1.exe (CLI)
+SSCOnWindows.exe (WinUI 3)  /  SSCOnWindows-0.1.1.exe (CLI)
 ├── WinUI Layer (winui3/, C++/WinRT)
 │   ├── App / MainWindow     Scan, connect, codec/quality/rate, volume, stats, log
 │   ├── Streaming Mode panel WinUSB / BTHUSB driver toggle

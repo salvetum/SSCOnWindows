@@ -49,7 +49,7 @@ nav_order: 4
 ## モジュール構成
 
 ```
-SSCOnWindows.exe (WinUI 3)  /  SSCOnWindows-0.1.exe (CLI)
+SSCOnWindows.exe (WinUI 3)  /  SSCOnWindows-0.1.1.exe (CLI)
 ├── WinUI レイヤー (winui3/、C++/WinRT)
 │   ├── App / MainWindow     スキャン、接続、コーデック/品質/レート、音量、統計、ログ
 │   ├── Streaming Mode パネル  WinUSB / BTHUSB ドライバートグル

@@ -49,7 +49,7 @@ PC の**内蔵** Bluetooth アダプターでは絶対にドライバーを切�
 
 **CLI から確認:**
 ```
-SSCOnWindows-0.1.exe --cli -l
+SSCOnWindows-0.1.1.exe --cli -l
 ```
 
 ## 手順 3: 起動
@@ -61,7 +61,7 @@ SSCOnWindows.exe
 
 **CLI:**
 ```
-SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF
+SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF
 ```
 
 詳細は[使い方](usage)をご覧ください。

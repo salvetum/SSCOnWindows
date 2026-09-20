@@ -42,19 +42,19 @@ WinUI 3 インターフェースでは以下の操作が可能です:
 
 ```bash
 # SSC（既定）
-SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF
+SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF
 ```
 
 ### コーデックと品質
 
 ```bash
-SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc       # SSC
-SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c aac       # AAC
-SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c sbc       # SBC
+SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc       # SSC
+SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c aac       # AAC
+SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c sbc       # SBC
 
-SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc -q hq   # 229 kbps（48k、既定）
-SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc -q std  # 192 kbps
-SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc -q mq   # 128 kbps
+SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc -q hq   # 229 kbps（48k、既定）
+SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc -q std  # 192 kbps
+SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc -q mq   # 128 kbps
 ```
 
 要求したコーデックが利用できない場合のフォールバック優先度: **SSC > AAC > SBC**。
@@ -64,15 +64,15 @@ SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc -q mq   # 128 kbps
 UHQ は 48 kHz キャプチャに 2x SRC を適用し、96 kHz のビットレートセットを使用します。UHQ ケーパビリティビットをアドバタイズするシンクでのみ使用可能で、それ以外の場合はアプリが 48 kHz にフォールバックします。
 
 ```bash
-SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --uhq        # 584 kbps（既定）
-SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --uhq -q std # 442 kbps
-SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --uhq -q mq  # 250 kbps
+SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --uhq        # 584 kbps（既定）
+SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --uhq -q std # 442 kbps
+SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --uhq -q mq  # 250 kbps
 ```
 
 ### ビットレートを明示指定
 
 ```bash
-SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --bitrate 192
+SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --bitrate 192
 ```
 
 アクティブモードの有効セット外の値は自動的にスナップされます（サポート外のビットレートをバイナリに渡すと音声が乱れます）。
@@ -80,7 +80,7 @@ SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --bitrate 192
 ### ネイティブ SSC デーモン（試験的）
 
 ```bash
-SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --ssc-native
+SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --ssc-native
 ```
 
 WSL2 の代わりに、aarch64 SSC バイナリを Windows 上の Qiling（`py -3.14`）で実行します。WSL2 は不要ですが遅く、UHQ では WSL2 を推奨します。
@@ -89,7 +89,7 @@ WSL2 の代わりに、aarch64 SSC バイナリを Windows 上の Qiling（`py -
 
 ```bash
 # ペアリング済みの Bluetooth オーディオデバイスを一覧表示
-SSCOnWindows-0.1.exe --cli -l
+SSCOnWindows-0.1.1.exe --cli -l
 ```
 
 {: .note }

@@ -2,6 +2,30 @@
 
 All notable changes to this fork are documented here.
 
+## [0.1.1] — 2026-09-20
+
+### Changed: CLI console readability (engineering/design pass)
+
+- Added a minimal ANSI color layer (`app/src/console_style.h`): colors are emitted
+  only on a real console (TTY); pipes/redirection stay byte-clean; `NO_COLOR` env
+  and a new `--no-color` flag disable colors outright on Windows (`VT` processing).
+- Diagnostic rows now share one aligned tag column and a tag/color language
+  (`INFO` / `OK` / `WARN` / `ERROR` / `DATA`) used by the CLI, the WinUI log pane
+  and `setup.ps1`: `CAP:`, `STATS:`, `SSC:`, `BTstack:`, `CB:` are cyan; unhealthy
+  values are highlighted (low capture rate, encode round-trip > 15 ms, `ret<=0`,
+  BT transmit errors, WASAPI callback > 15 ms). Field keywords are unchanged so
+  existing parsers (golden tooling, telemetry) keep working.
+- Step banners, codec/stream success, reconnect state and error paths are colored
+  (bold/green/yellow/red); `--no-color` added to `--help` output.
+
+### Changed: version bump 0.1 → 0.1.1
+
+- CLI exe renamed `SSCOnWindows-0.1.exe` → `SSCOnWindows-0.1.1.exe`
+  (`project(VERSION 0.1.1)`, `APP_VERSION` follows from CMake).
+- WinUI: `APP_VERSION` define, header subtitle and `app.manifest`
+  `assemblyIdentity version="0.1.1.0"` updated; wx fallback defines updated.
+- Docs, README and the `release.yml` artifact paths/names bumped to 0.1.1.
+
 ## [0.1] — 2026-09-18
 
 ### Changed: codec set reduced to SSC / AAC / SBC

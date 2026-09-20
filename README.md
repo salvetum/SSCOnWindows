@@ -2,7 +2,7 @@
 
 Stream Windows system audio to Samsung Galaxy Buds over **Samsung Scalable Codec (SSC)**, using a USB Bluetooth dongle in WinUSB mode (external HCI via BTstack). No kernel driver, no test signing.
 
-> **Version 0.1** — by **Salvetum**
+> **Version 0.1.1** — by **Salvetum**
 > A fork of [A2DP Windows Bridge](https://github.com/SeiyaFunaokaJP/A2DP-Windows-Bridge) by Seiya Funaoka, adding a full **SSC (Samsung Scalable Codec)** encoder pipeline alongside AAC and SBC.
 
 ---
@@ -34,7 +34,7 @@ Codec fallback priority when the requested codec is unavailable: **SSC > AAC > S
 
 ```
 +-------------------------------------------------------------+
-|  SSCOnWindows.exe (WinUI 3 GUI)  /  SSCOnWindows-0.1.exe (CLI) |
+|  SSCOnWindows.exe (WinUI 3 GUI)  /  SSCOnWindows-0.1.1.exe (CLI) |
 |  +-- a2dpwb_core (shared C++ backend) --------------------+  |
 |  |  WASAPI loopback capture (48 kHz, float32)             |  |
 |  |  Encoder:  SSC  |  AAC (fdk-aac)  |  SBC (bluedroid)   |  |
@@ -113,7 +113,7 @@ cmake -S SSCOnWindows -B SSCOnWindows\build_msvc -A x64 "-DCMAKE_POLICY_VERSION_
 cmake --build SSCOnWindows\build_msvc --config Release --target A2DPWB -j 8
 ```
 
-Output: `build_msvc\app\Release\SSCOnWindows-0.1.exe`.
+Output: `build_msvc\app\Release\SSCOnWindows-0.1.1.exe`.
 
 ### WinUI 3 GUI
 
@@ -145,28 +145,28 @@ Run `SSCOnWindows.exe`. The interface provides device scan/connect, codec (SSC/A
 
 ```powershell
 # SSC (default) to a device
-SSCOnWindows-0.1.exe --cli -d 78:C1:1D:A7:BC:EE
+SSCOnWindows-0.1.1.exe --cli -d 78:C1:1D:A7:BC:EE
 
 # Pick a codec and quality
-SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc -q hq   # 229 kbps (48k)
-SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc -q std  # 192 kbps
-SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc -q mq   # 128 kbps
-SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c aac
-SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c sbc
+SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc -q hq   # 229 kbps (48k)
+SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc -q std  # 192 kbps
+SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc -q mq   # 128 kbps
+SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c aac
+SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c sbc
 
 # SSC UHQ 96 kHz (2x SRC from the 48 kHz capture; UHQ-capable sinks only)
-SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --uhq
-SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --uhq -q hq  # 584 kbps
+SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --uhq
+SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --uhq -q hq  # 584 kbps
 
 # Explicit bitrate override (snapped to the active mode's valid set)
-SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --bitrate 192
+SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --bitrate 192
 
 # Native SSC daemon instead of WSL2 (experimental)
-SSCOnWindows-0.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --ssc-native
+SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --ssc-native
 
 # List paired Bluetooth audio devices / show help
-SSCOnWindows-0.1.exe --cli -l
-SSCOnWindows-0.1.exe --help
+SSCOnWindows-0.1.1.exe --cli -l
+SSCOnWindows-0.1.1.exe --help
 ```
 
 > Windows output volume does not change the captured level: WASAPI loopback captures pre-volume-mix audio. Use the device volume slider (AVRCP) to change headphone loudness.

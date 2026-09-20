@@ -30,7 +30,7 @@ cmake -S SSCOnWindows -B SSCOnWindows\build_msvc -A x64 "-DCMAKE_POLICY_VERSION_
 cmake --build SSCOnWindows\build_msvc --config Release --target A2DPWB -j 8
 ```
 
-The CLI executable is output to `build_msvc\app\Release\SSCOnWindows-0.1.exe`.
+The CLI executable is output to `build_msvc\app\Release\SSCOnWindows-0.1.1.exe`.
 
 {: .note }
 The first build takes several minutes because CMake FetchContent downloads and compiles wxWidgets (v3.2.6).

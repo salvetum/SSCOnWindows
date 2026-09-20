@@ -68,7 +68,7 @@
       <AdditionalOptions>%(AdditionalOptions) /bigobj</AdditionalOptions>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <AdditionalIncludeDirectories>$(XamlGeneratedOutputPath);$(GeneratedFilesDir);$(ProjectDir);$(ProjectDir)..\app\src;$(ProjectDir)..\extern\json\include;$(ProjectDir)..\extern\fdk-aac\libAACenc\include;$(ProjectDir)..\extern\fdk-aac\libSYS\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PreprocessorDefinitions>_WIN32_WINNT=0x0A00;NOMINMAX;WIN32_LEAN_AND_MEAN;APP_VERSION="0.1";AAC_ENCODER_AVAILABLE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>_WIN32_WINNT=0x0A00;NOMINMAX;WIN32_LEAN_AND_MEAN;APP_VERSION="0.1.1";AAC_ENCODER_AVAILABLE=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
