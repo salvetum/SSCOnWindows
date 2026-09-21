@@ -26,7 +26,7 @@ jobs:
         shell: pwsh
         run: cmake -S . -B build_msvc -A x64 "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
 
-      - name: Build CLI (SSCOnWindows-0.1.1.exe; includes wxWidgets FetchContent)
+      - name: Build CLI (SSCOnWindows-0.2.0.exe; includes wxWidgets FetchContent)
         shell: pwsh
         run: cmake --build build_msvc --config Release --target A2DPWB -j 2
 
@@ -40,20 +40,20 @@ jobs:
       - name: Stage release payload (no proprietary blob / firmware)
         shell: pwsh
         run: |
-          $dist = 'dist\SSCOnWindows-0.1.1'
+          $dist = 'dist\SSCOnWindows-0.2.0'
           New-Item -ItemType Directory -Force -Path $dist | Out-Null
-          Copy-Item 'build_msvc\app\Release\SSCOnWindows-0.1.1.exe' $dist -Force
+          Copy-Item 'build_msvc\app\Release\SSCOnWindows-0.2.0.exe' $dist -Force
           Copy-Item 'winui3\bin\x64\Release\*' $dist -Recurse -Force
           Copy-Item README.md, LICENSE, THIRD_PARTY_LICENSES.md $dist -Force
-          Compress-Archive -Path "$dist\*" -DestinationPath "dist\SSCOnWindows-0.1.1.zip" -Force
-          Get-FileHash "dist\SSCOnWindows-0.1.1.zip" -Algorithm SHA256 |
+          Compress-Archive -Path "$dist\*" -DestinationPath "dist\SSCOnWindows-0.2.0.zip" -Force
+          Get-FileHash "dist\SSCOnWindows-0.2.0.zip" -Algorithm SHA256 |
             ForEach-Object { "$($_.Hash)  $([IO.Path]::GetFileName($_.Path))" } |
-            Set-Content "dist\SSCOnWindows-0.1.1.zip.sha256" -Encoding ascii
+            Set-Content "dist\SSCOnWindows-0.2.0.zip.sha256" -Encoding ascii
 
       - name: Create GitHub Release (draft)
         shell: pwsh
         run: |
-          gh release create "${{ github.ref_name }}" "dist\SSCOnWindows-0.1.1.zip" "dist\SSCOnWindows-0.1.1.zip.sha256" ``
+          gh release create "${{ github.ref_name }}" "dist\SSCOnWindows-0.2.0.zip" "dist\SSCOnWindows-0.2.0.zip.sha256" ``
             --repo "${{ github.repository }}" --draft `
             --title "SSC On Windows ${{ github.ref_name }}" `
             --notes "Binaries only. The proprietary Samsung SSC blob is NOT distributed; see README / THIRD_PARTY_LICENSES.md."

@@ -207,7 +207,7 @@ sürücüsü devre dışı). Bu yüzden:
 - Testler: golden 6/6 PASS (48k: 128k/192k/229k; 96k: 250k/442k/584k, frame
   284/500/660 byte), build'ler EXIT 0. **Canlı cihaz testi yapılamadı** (Bud'lar
   erişilemezdi, BT 0x04); kod ve golden kedebilir, bud'lar gelince
-  `SSCOnWindows-0.1.1.exe --cli -d 78:C1:1D:A7:BC:EE -c ssc --uhq` ile doğrula.
+  `SSCOnWindows-0.2.0.exe --cli -d 78:C1:1D:A7:BC:EE -c ssc --uhq` ile doğrula.
 - **Canlı test sonucu (2026-09-17): 96 kHz UHQ Buds3 FE'de ÇALIŞMIYOR.** Buds3 FE
   SSC cap=`0x3C` ilan ediyor (UHQ `0x02` biti **yok**). App yine de `0x0E` config +
   96 kHz PCM gönderince link sağlıklı (`err=0`, `ret=660`) ama ses **sessiz**.

@@ -31,7 +31,7 @@ cmake -S SSCOnWindows -B SSCOnWindows\build_msvc -A x64 "-DCMAKE_POLICY_VERSION_
 cmake --build SSCOnWindows\build_msvc --config Release --target A2DPWB -j 8
 ```
 
-CLI 実行ファイルは `build_msvc\app\Release\SSCOnWindows-0.1.1.exe` に出力されます。
+CLI 実行ファイルは `build_msvc\app\Release\SSCOnWindows-0.2.0.exe` に出力されます。
 
 {: .note }
 初回ビルドは CMake FetchContent が wxWidgets (v3.2.6) をダウンロード・コンパイルするため、数分かかります。

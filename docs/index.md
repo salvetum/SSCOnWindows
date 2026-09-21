@@ -11,7 +11,7 @@ Stream Windows system audio to Samsung Galaxy Buds over **Samsung Scalable Codec
 
 A fork of [A2DP Windows Bridge](https://github.com/SeiyaFunaokaJP/A2DP-Windows-Bridge)
 by Seiya Funaoka, adding a full SSC encoder pipeline alongside **AAC** and **SBC**.
-Version 0.1.1, by **Salvetum**.
+Version 0.2.0, by **Salvetum**.
 
 [Get Started](setup){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
 [GitHub](https://github.com/SeiyaFunaokaJP/A2DP-Windows-Bridge){: .btn .fs-5 .mb-4 .mb-md-0 }

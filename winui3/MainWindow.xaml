@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8" ?>
+<?xml version="1.0" encoding="utf-8" ?>
 <Window
     x:Class="A2DPWBWinUI.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -47,7 +47,7 @@ Title="SSC On Windows"
             <StackPanel Grid.Column="0" VerticalAlignment="Center">
                 <TextBlock Style="{StaticResource TitleTextBlockStyle}" Text="SSC On Windows" />
                 <TextBlock x:Name="VersionCreditText" Style="{StaticResource CaptionTextBlockStyle}" Opacity="0.6"
-                           Text="v0.1.1 &#183; by Salvetum" />
+                           Text="v0.2.0 &#183; by Salvetum" />
             </StackPanel>
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"

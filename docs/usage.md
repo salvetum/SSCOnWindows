@@ -41,19 +41,19 @@ Add `--cli` to run without a GUI window.
 
 ```bash
 # SSC (default)
-SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF
+SSCOnWindows-0.2.0.exe --cli -d AA:BB:CC:DD:EE:FF
 ```
 
 ### Codec and Quality
 
 ```bash
-SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc       # SSC
-SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c aac       # AAC
-SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c sbc       # SBC
+SSCOnWindows-0.2.0.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc       # SSC
+SSCOnWindows-0.2.0.exe --cli -d AA:BB:CC:DD:EE:FF -c aac       # AAC
+SSCOnWindows-0.2.0.exe --cli -d AA:BB:CC:DD:EE:FF -c sbc       # SBC
 
-SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc -q hq   # 229 kbps (48k, default)
-SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc -q std  # 192 kbps
-SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc -q mq   # 128 kbps
+SSCOnWindows-0.2.0.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc -q hq   # 229 kbps (48k, default)
+SSCOnWindows-0.2.0.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc -q std  # 192 kbps
+SSCOnWindows-0.2.0.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc -q mq   # 128 kbps
 ```
 
 Fallback priority when the requested codec is unavailable: **SSC > AAC > SBC**.
@@ -65,15 +65,15 @@ only usable on a sink that advertises the UHQ capability bit; otherwise the app
 falls back to 48 kHz.
 
 ```bash
-SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --uhq        # 584 kbps (default)
-SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --uhq -q std # 442 kbps
-SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --uhq -q mq  # 250 kbps
+SSCOnWindows-0.2.0.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --uhq        # 584 kbps (default)
+SSCOnWindows-0.2.0.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --uhq -q std # 442 kbps
+SSCOnWindows-0.2.0.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --uhq -q mq  # 250 kbps
 ```
 
 ### Explicit Bitrate
 
 ```bash
-SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --bitrate 192
+SSCOnWindows-0.2.0.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --bitrate 192
 ```
 
 Values outside the active mode's valid set are snapped automatically (feeding an
@@ -82,7 +82,7 @@ unsupported bitrate to the blob produces garbled audio).
 ### Native SSC Daemon (experimental)
 
 ```bash
-SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --ssc-native
+SSCOnWindows-0.2.0.exe --cli -d AA:BB:CC:DD:EE:FF -c ssc --ssc-native
 ```
 
 Runs the aarch64 SSC blob under Qiling on Windows (`py -3.14`) instead of WSL2.
@@ -92,7 +92,7 @@ No WSL2 required, but slower; prefer WSL2 for UHQ.
 
 ```bash
 # List paired Bluetooth audio devices
-SSCOnWindows-0.1.1.exe --cli -l
+SSCOnWindows-0.2.0.exe --cli -l
 ```
 
 {: .note }

@@ -50,7 +50,7 @@ You need the Bluetooth MAC address of your headphones/speakers.
 
 **From the CLI:**
 ```
-SSCOnWindows-0.1.1.exe --cli -l
+SSCOnWindows-0.2.0.exe --cli -l
 ```
 
 ## Step 3: Run
@@ -62,7 +62,7 @@ SSCOnWindows.exe
 
 **CLI:**
 ```
-SSCOnWindows-0.1.1.exe --cli -d AA:BB:CC:DD:EE:FF
+SSCOnWindows-0.2.0.exe --cli -d AA:BB:CC:DD:EE:FF
 ```
 
 See [Usage](usage) for full details.

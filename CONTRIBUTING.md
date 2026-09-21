@@ -55,6 +55,27 @@ git -C extern/btstack apply ..\..\patches\btstack-win-usb-logs.patch
 4. Commit your changes (`git commit -m "Add my feature"`)
 5. Push and open a pull request
 
+## Versioning (SemVer)
+
+This project follows [Semantic Versioning](https://semver.org/); while on the
+`0.x` line, the assignment rules are:
+
+- **Patch (0.x.N)** — bug fixes, internal refactors, docs-only changes.
+- **Minor (0.N.0)** — new/backward-compatible features (codec modes, GUI
+  features, tests, new daemon capabilities).
+- **Major (1.0.0 and later)** — breaking changes, per standard SemVer.
+
+Rules for contributors:
+- Every user-visible change belongs in `CHANGELOG.md` (Keep a Changelog
+  format) — new work goes under `[Unreleased]` and is folded into the version
+  header at release time.
+- Do **not** bump the version in a feature PR; the maintainer bumps
+  (`project(VERSION)` in `CMakeLists.txt`, WinUI `APP_VERSION` +
+  `app.manifest`, the two wx `APP_VERSION` defines, and the names in
+  `README.md` / `docs/` / `release.yml`) when cutting a release.
+- Update `docs/compatibility.md` when you add tested hardware, and
+  `docs/architecture.md` when threads, time budgets or failure handling change.
+
 ## Proprietary binaries
 
 Do **not** add proprietary or downloaded binaries to this repository:
