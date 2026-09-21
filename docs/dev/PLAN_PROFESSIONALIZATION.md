@@ -13,8 +13,8 @@
 | 2 | CI/CD | ✅ 96ea97a (build/lint/golden/release workflow'ları; vcxproj portability) |
 | 3 | Kurulum Otomasyonu | ✅ yerelde parse + dry-run doğrulandı (committed) |
 | 4 | Kod Kalitesi ve Test Kapsamı | ✅ `codec_policy.h` + doctest unit/integration testler + daemon `CMD_SHUTDOWN` |
-| 5 | Dokümantasyon ve Sürümleme | ⏳ |
-| 6 | Kapalı Kaynak SSC Bağımlılığı | ⏳ 6a öncelikli (denetim Faz 6a'ya ağırlık verdi) |
+| 5 | Dokümantasyon ve Sürümleme | ✅ `f087899` + `528b887` (architecture/compatibility docs, SemVer + Keep a Changelog, 0.2.0) |
+| 6 | Kapalı Kaynak SSC Bağımlılığı | ✅ 6a (2026-09-21, `SscEncodeBackend` + Legal status; blob kullanıcı kararı ile tracked kaldı) — 6b açık kalır |
 | 7 | Topluluk ve Sürdürülebilirlik | ⏳ |
 
 ## Bağlam

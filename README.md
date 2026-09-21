@@ -198,6 +198,31 @@ python tools\golden\ssc_golden.py gen --rate 96000 --bitrate 584   # re-freeze a
 - The SSC daemon does not exit on SIGTERM while a client is connected; the app's watchdog closes its own socket first.
 - Windows crossfade/volume only affects headphones through AVRCP, not the captured stream.
 
+## Legal status
+
+**In short:** this project provides *interoperability* with Samsung's proprietary **SSC**
+codec; it does not redistribute Samsung's definition of the format, and it takes no
+position on the patent/copyright status of audio codecs.
+
+- **SSC is a proprietary format owned by Samsung Electronics.** This project targets
+  *interoperability* — streaming PCM audio from a Windows PC to Samsung Galaxy Buds —
+  not the format's specification, and not a "clone" of Samsung's codec.
+- **The encoder is Samsung's binary**: the real Samsung `libScalable_Encoder.so`
+  (aarch64) is executed inside an emulator (WSL2/qemu by default, Qiling on Windows
+  with `--ssc-native`). It is wrapped behind an `SscEncodeBackend` interface
+  (`app/src/ssc_encode_backend.h`) so a future open implementation could replace it
+  without touching the rest of the pipeline.
+- **Distribution**: the blob is currently bundled in *this repository* under
+  `tools/ssc_payload/blob/` and `tools/ssc_daemon/rootfs/blob/` (an interim decision,
+  documented in `docs/dev/audit-2026.md`). **Binary releases never ship it**, and the
+  recommended legal path is to supply your own copy extracted from a device you own:
+  `.\setup.ps1 -BlobFrom <your own extracted .so>`.
+- **Use at your own risk.** Samsung does not license SSC to this project. Whether the
+  codec is patent-encumbered is not fully clear, and third-party patents may apply in
+  some jurisdictions. This project is provided "as is", for interoperability and
+  personal use; consult a qualified IP lawyer before any commercial redistribution.
+  See also [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
+
 ## Forks, credits and licenses
 
 This project builds on the work of many others. Upstream code and libraries:

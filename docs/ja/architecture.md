@@ -64,9 +64,11 @@ SSCOnWindows.exe (WinUI 3)  /  SSCOnWindows-0.2.0.exe (CLI)
 │   ├── btstack_transport   BTstack 統合 (HCI, L2CAP, AVDTP, A2DP, AVRCP)
 │   ├── wasapi_capture      WASAPI ループバックオーディオキャプチャ + 自動ミュート
 │   ├── audio_encoder       エンコーダーインターフェース（抽象基底）
-│   │   ├── ssc_encoder         SSC (Samsung バイナリを TCP デーモン経由)
+│   │   ├── ssc_encoder         SSC ファサード -> SscEncodeBackend（下記）
 │   │   ├── aac_encoder         AAC-LC (fdk-aac、LATM トランスポート)
 │   │   └── a2dp_sbc_encoder    SBC (BTstack Bluedroid)
+│   ├── ssc_encode_backend  エンコーダーエンジンインターフェース（Faz 6a 分離）
+│   │   └── ssc_daemon_backend TCP デーモンバックエンド（blob を WSL2/Qiling 経由）+ ウォッチドッグ
 │   ├── resampler           SSC UHQ（96 kHz）用の 2x SRC
 │   ├── driver_mode         ドングルのドライバーモード検出 (WinUSB vs BTHUSB)
 │   ├── driver_switch       WinUSB INF 生成 + 署名 + インストール/削除

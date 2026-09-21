@@ -73,9 +73,11 @@ SSCOnWindows.exe (WinUI 3)  /  SSCOnWindows-0.2.0.exe (CLI)
 │   ├── btstack_transport   BTstack integration (HCI, L2CAP, AVDTP, A2DP, AVRCP)
 │   ├── wasapi_capture      WASAPI loopback audio capture + auto-mute
 │   ├── audio_encoder       Encoder interface (abstract base)
-│   │   ├── ssc_encoder         SSC (Samsung blob over TCP daemon + watchdog)
+│   │   ├── ssc_encoder         SSC facade -> SscEncodeBackend (see below)
 │   │   ├── aac_encoder         AAC-LC (fdk-aac, LATM transport)
 │   │   └── a2dp_sbc_encoder    SBC (BTstack Bluedroid)
+│   ├── ssc_encode_backend  Encoder-engine interface (Faz 6a isolation)
+│   │   └── ssc_daemon_backend TCP daemon backend (blob via WSL2/Qiling) + watchdog
 │   ├── resampler           2x SRC for SSC UHQ (96 kHz)
 │   ├── driver_mode         Dongle driver-mode detection (WinUSB vs BTHUSB)
 │   ├── driver_switch       WinUSB INF generation + signing + install/remove
@@ -234,9 +236,12 @@ Captures system audio in real time via the Windows Audio Session API.
   muting speakers does not affect the headphones)
 - Configurable device selection
 
-### SSC Encoder (`ssc_encoder.cpp`)
+### SSC Encoder (`ssc_encoder.cpp` → `SscEncodeBackend`)
 
-TCP client to the encoder daemon, plus resilience:
+Faz 6a isolation: the closed-source encoder engine is reached only through the
+`SscEncodeBackend` interface (`ssc_encode_backend.h`). The default
+`DaemonSscBackend` (`ssc_daemon_backend.cpp`) is a TCP client to the encoder
+daemon, plus resilience:
 - Synchronous request/response per 864-sample frame (split timing
   `t_send / t_hdr / t_data / total` for diagnostics)
 - `pick_bitrate()` + `snap_bitrate_kbps()` → both delegate to `codec_policy`
@@ -245,6 +250,8 @@ TCP client to the encoder daemon, plus resilience:
   exposed for diagnostics
 - `shutdown()` → `request_shutdown()` sends `CMD_SHUTDOWN` (0x44434853) so the
   daemon exits cleanly instead of hanging on SIGTERM with a client connected
+- A future open implementation (Faz 6b) can be provided as another
+  `SscEncodeBackend` drop-in
 
 ### Audio Encoders
 

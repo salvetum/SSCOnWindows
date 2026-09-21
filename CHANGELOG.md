@@ -9,7 +9,21 @@ Types of changes: **Added** / **Changed** / **Deprecated** / **Removed** /
 
 ## [Unreleased]
 
-No unreleased changes yet.
+### Added
+
+- **`SscEncodeBackend` isolation** (Faz 6a) — the closed-source encoder blob is now
+  reached only through the `app/src/ssc_encode_backend.h` interface. All WSL2/qemu +
+  Qiling daemon, socket and wire-protocol logic moved into the default
+  `DaemonSscBackend` (`app/src/ssc_daemon_backend.cpp`); `SscEncoder` is now a thin
+  facade with unchanged public behavior (verified by the 6-profile golden
+  regression, still byte-exact). A future open implementation (Faz 6b) can be
+  swapped in as a drop-in.
+- **README "Legal status" section** — SSC is Samsung's proprietary format: this
+  project targets interoperability, not the format definition, and neither binary
+  releases nor the setup flow distribute the blob (user-supplied `-BlobFrom`
+  remains the recommended legal path).
+- **LICENSE** now also carries the fork copyright line
+  (`Copyright (c) 2026 Salvetum (SSC On Windows fork)`).
 
 ## [0.2.0] — 2026-09-21
 
