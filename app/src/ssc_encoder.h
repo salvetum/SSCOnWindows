@@ -1,10 +1,12 @@
 /*
  * SSC Encoder Wrapper
  *
- * Samsung Scalable Codec encoder. PCM16 is sent over TCP to the
- * "sscblobd" daemon running inside WSL2, which encodes via the real
- * Samsung libScalable_Encoder.so (under qemu-aarch64) and returns the
- * encoded SSC frame.
+ * Samsung Scalable Codec encoder facade. Concrete encoding is delegated to
+ * an SscEncodeBackend (see ssc_encode_backend.h). The default backend —
+ * DaemonSscBackend — sends PCM over TCP to the "sscblobd" daemon running
+ * inside WSL2 (or natively under Qiling with --ssc-native), which encodes
+ * via the real Samsung libScalable_Encoder.so (under qemu-aarch64) and
+ * returns the encoded SSC frame.
  *
  * SPDX-License-Identifier: MIT
  */
@@ -13,12 +15,9 @@
 #define SSC_ENCODER_H
 
 #include "audio_encoder.h"
+#include "ssc_encode_backend.h"
 #include <cstdint>
-#include <string>
-
-#ifdef _WIN32
-#include <winsock2.h>
-#endif
+#include <memory>
 
 class SscEncoder : public AudioEncoder {
 public:
@@ -63,41 +62,18 @@ public:
     void shutdown() override;
 
 private:
-    /* Send the wire-protocol CMD_SHUTDOWN magic so the daemon exits cleanly
-     * instead of the client just dropping the socket. Best effort. */
-    void request_shutdown();
-
     /* Pick a bitrate for the given sample rate + quality. */
     uint32_t pick_bitrate(EncoderQuality quality, uint32_t sample_rate) const;
 
-    /* (Re)start the daemon and connect to it. */
-    bool start_daemon(uint32_t sample_rate, uint32_t channels, uint32_t bitrate);
-
-    /* Spawn the Windows-native Qiling daemon (sscblobd.py). */
-    bool start_native_daemon();
-
-    /* Locate the native daemon script (env SSC_DAEMON_PY, exe-relative, repo). */
-    std::string find_native_daemon_script();
-
-    /* Run a wsl.exe command, capture stdout. */
-    std::string run_wsl(const std::string &args);
-
-    bool connected_ = false;
     bool initialized_ = false;
     bool native_daemon_ = false;
     uint32_t bitrate_kbps_ = 0;
     uint32_t bitrate_override_kbps_ = 0;
     uint32_t channels_ = 2;
-    uint32_t sample_rate_ = 48000;
-    uint32_t bitrate_ = 229000;
     uint64_t next_recovery_ms_ = 0;
     uint32_t recovery_count_ = 0;
-    int daemon_port_ = 0;
 
-#ifdef _WIN32
-    SOCKET sock_ = INVALID_SOCKET;
-    void *native_proc_ = nullptr;   /* HANDLE to sscblobd.py process */
-#endif
+    std::unique_ptr<SscEncodeBackend> backend_;
 };
 
 #endif /* SSC_ENCODER_H */

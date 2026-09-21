@@ -52,6 +52,7 @@ add_library(a2dpwb_core STATIC
     src/a2dp_sbc_encoder.cpp
     src/aac_encoder.cpp
     src/ssc_encoder.cpp
+    src/ssc_daemon_backend.cpp
     src/bt_device.cpp
     src/bt_adapter_enum.cpp
     src/audio_device_enum.cpp
