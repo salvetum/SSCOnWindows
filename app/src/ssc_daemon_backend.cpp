@@ -268,7 +268,7 @@ bool DaemonSscBackend::encode(const int32_t *pcm, size_t frames, size_t channels
 
     uint32_t expect_bytes = static_cast<uint32_t>(frames) * static_cast<uint32_t>(channels)
                             * sizeof(int32_t);
-    if (expect_bytes > out_cap) return false;
+    if (frames == 0 || channels == 0) return false;
 
 #ifdef _WIN32
     LARGE_INTEGER sq, eq, sfq, hq, fq, frq;
