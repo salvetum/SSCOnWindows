@@ -63,6 +63,7 @@ static uint32_t g_encoder_sample_bytes = 2; /* 2 for int16, 4 for int32 */
 static double g_pcm_int32_scale = 2147483647.0; /* int32 scale (SSC daemon expects 2^29) */
 static uint32_t g_encode_sample_rate = 0; /* 0 = same as capture; 96000 = SSC UHQ */
 static bool g_ssc_native_daemon = false; /* --ssc-native: Windows Qiling daemon */
+static bool g_hci_dump = false;          /* --hci-dump: BTstack packet dump to stdout (debug) */
 static uint32_t g_ssc_bitrate_kbps = 0;  /* --bitrate: explicit SSC kbps (0 = auto) */
 
 /* BTstack transport */
@@ -480,6 +481,7 @@ static void print_usage(const char *prog) {
     printf("  --no-color            Disable ANSI colors in CLI output\n");
     printf("  --bitrate <kbps>      SSC bitrate override (0=auto; snapped to a supported value)\n");
     printf("                        (spawns tools\\ssc_daemon\\sscblobd.py; env SSC_DAEMON_PY override)\n");
+    printf("  --hci-dump            BTstack HCI packet dump to stdout (debug; off by default)\n");
     printf("  -l           List available Bluetooth audio devices and exit\n");
     printf("  -u <path>    USB device path for BTstack (optional)\n");
     printf("  -h           Show this help\n");
@@ -535,7 +537,7 @@ static int run_streaming(const uint8_t target_addr[6],
     BtStackTransport transport;
     transport.set_link_key_dir(get_config_dir());
     transport.set_firmware_dir(get_config_dir());
-    transport.set_hci_dump_enabled(true);
+    transport.set_hci_dump_enabled(g_hci_dump);
 
     /* Detect embedded Realtek chip from the connected USB adapter so
      * BTstack can load the correct firmware (Windows no longer loads it
@@ -991,6 +993,8 @@ int main(int argc, char *argv[]) {
             g_ssc_bitrate_kbps = static_cast<uint32_t>(atoi(argv[++i]));
         } else if (strcmp(argv[i], "--no-color") == 0) {
             continue;  /* handled in the pre-scan above */
+        } else if (strcmp(argv[i], "--hci-dump") == 0) {
+            g_hci_dump = true;
         } else if (strcmp(argv[i], "-h") == 0) {
             print_usage(argv[0]);
             return 0;
