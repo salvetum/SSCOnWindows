@@ -142,6 +142,20 @@
                             <TextBlock Text="Press 'Direct Connect' in the header to use it."
                                        Style="{StaticResource HintGrayTextStyle}" TextWrapping="Wrap" />
                         </StackPanel>
+
+                        <!-- Device facts. Populated only from what the headset
+                             actually advertises (A2dpService::get_device_caps);
+                             no battery or signal field exists in this project,
+                             so none is shown. -->
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Headset capabilities"
+                                       Style="{StaticResource CaptionGrayTextStyle}" />
+                            <TextBlock x:Name="DeviceCapsText" Text="Not known until connected."
+                                       TextWrapping="Wrap" Typography.NumeralAlignment="Tabular" />
+                            <TextBlock x:Name="DeviceCapsHintText"
+                                       Text="Codec support is read from the headset's A2DP capabilities once a link is up."
+                                       Style="{StaticResource HintGrayTextStyle}" TextWrapping="Wrap" />
+                        </StackPanel>
                     </StackPanel>
                 </Grid>
             </Border>
@@ -176,6 +190,19 @@
                             Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Live statistics" Style="{StaticResource SectionLabelTextStyle}" />
+                            <Grid ColumnSpacing="8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock x:Name="StreamHealthText" Grid.Column="0"
+                                           Text="No data yet" FontWeight="SemiBold"
+                                           VerticalAlignment="Center" />
+                                <TextBlock x:Name="StatsFreshnessText" Grid.Column="1"
+                                           Style="{StaticResource HintGrayTextStyle}"
+                                           HorizontalAlignment="Right" VerticalAlignment="Center"
+                                           TextTrimming="CharacterEllipsis" />
+                            </Grid>
                             <StackPanel Orientation="Horizontal" Spacing="16">
                                 <TextBlock x:Name="LatencyText" Text="Latency: &#8212;" Style="{StaticResource StatsValueTextStyle}" />
                                 <TextBlock x:Name="ErrorRateText" Text="Error rate: &#8212;" Style="{StaticResource StatsValueTextStyle}" />

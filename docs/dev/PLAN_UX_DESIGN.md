@@ -66,7 +66,7 @@ loopback'ten upsample edildiği ve UHQ destekleyen kulaklık gerektirdiği,
 loopback'in ses karışımından önce alındığı (hoparlör seviyesi etkilemez),
 oran farkı varsa resampling yapıldığı açıklanır.
 
-### Faz 2 — Cihaz bilgisi ve canlı sağlık göstergeleri
+### Faz 2 — Cihaz bilgisi ve canlı sağlık göstergeleri ✅ (2026-09-21)
 
 - `Devices` bölümünde cihaz adı, model/ürün görseli, pil seviyesi ve şarj durumu
 	gösterilir. Görsel bulunamazsa nötr bir cihaz simgesi kullanılır.
@@ -80,6 +80,35 @@ oran farkı varsa resampling yapıldığı açıklanır.
 **Kabul kriterleri:** Gerçek veri yokken sahte pil/kalite değeri gösterilmez;
 cihaz görseli yüklenemese de düzen bozulmaz; CLI ve GUI aynı metriği aynı birimle
 gösterir.
+
+**Uygulandı (commit `de21dfd` sonrası):** Faz 2'nin ilk maddesi bu kod tabanında
+**uygulanamaz**, çünkü proje ne pil seviyesi ne de RSSi alıyor (`findstr /I battery`
+hiçbir yerde sonuç vermiyor; BTstack yalnızca codec SEID/capability octet'ini
+veriyor). Tahmin üretmemek kuralı gereği pil/sinyal alanı **hiç eklenmedi**;
+onun yerine elimizdeki gerçek veri, yani headset'in kendi codec yetenekleri
+gösteriliyor.
+
+- `A2dpService::DeviceCaps` + `get_device_caps()` (`app/src/a2dp_service.h`):
+  `known` bayrağı, `sbc/aac/ssc/ssc_uhq` ve ham `ssc_cap` oktetı. A2DP keşfi
+  bittiğinde `transport->get_remote_caps()`'ten doldurulur, `stop_streaming()`
+  ile temizlenir (bağlantı kopunca eski yetenekler ekranda kalmaz). `known`
+  bayrağı sayesinde arayüz "Not known until connected." diyebiliyor.
+- GUI `Connected device` bölümünde **Headset capabilities** bloğu:
+  `Codecs: SBC, AAC, SSC (cap 0x3C)` ve UHQ satırı. UHQ'nin yokluğu sessiz
+  üretme riski olduğu için ayrı ve açıklayıcı yazılır ("not advertised ... the
+  stream stays at 48 kHz", "not applicable (no SSC)").
+- `Live statistics` başlığına **sağlık hükmü** eklendi (`StreamHealthText`):
+  gerçek `StreamStats`'ten Good / Fair / Poor + gerekçesi ("send errors",
+  "audio dropped", "transport queue backing up", "encoder too slow for the frame
+  budget") ya da temiz durumda "no dropped frames or send errors". Eşikler çerçeve
+  bütçesinden geliyor: SSC karesi 864 örnek = 48 kHz'de 18 ms, yani bundan yavaş
+  bir encode turu takip edemez.
+- **Yaşlanma kuralı** (`UpdateFreshness()`): çekirdek istatistikleri yalnızca
+  akış açıkken ~1 Hz gönderiyor. Duran akışta değerler 1 Hz'lik bir
+  `DispatcherQueueTimer` ile yaşlandırılır; 6 saniyeden eskiyse soluklaştırılıp
+  "last update over 6 s ago - values may be stale" yazılır, akış hiç açılmadıysa
+  "no stream - statistics are not being collected" gösterilir. Böylece ölü bir
+  sayaç canlı gibi görünmez.
 
 ### Faz 3 — Görsel dil ve etkileşim
 

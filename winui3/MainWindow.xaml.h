@@ -75,7 +75,16 @@ namespace winrt::A2DPWBWinUI::implementation
         bool updatingVolumeFromDevice_{ false };
 
         void UpdateStats(const A2dpService::StreamStats& stats);
+        void UpdateFreshness();
+        void UpdateDeviceCaps();
         void UpdateSparkline();
+
+        /* Plan Faz 2: a stale number must not look live. The core pushes stats
+         * ~1 Hz while streaming and nothing when stopped, so this timer ages
+         * the freshness label and greys the values out. */
+        Microsoft::UI::Dispatching::DispatcherQueueTimer freshness_timer_{ nullptr };
+        uint64_t last_stats_tick_ = 0;
+        bool stats_are_fresh_{ false };
 
         std::deque<float> sparkLatency_;
         std::deque<float> sparkError_;

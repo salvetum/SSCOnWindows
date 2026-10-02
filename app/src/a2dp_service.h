@@ -76,6 +76,29 @@ public:
         uint64_t encode_calls = 0;
     };
 
+    /* ---- Device capabilities actually advertised by the headset ----
+     *
+     * Populated from BtStackTransport::get_remote_caps() once the A2DP
+     * discovery has completed, i.e. only after a device is connected. The
+     * `known` flag exists so the UI can say "not known yet" instead of
+     * rendering an all-false capability list that reads like "this headset
+     * supports nothing" (docs/dev/PLAN_UX_DESIGN.md Faz 2: never show
+     * fabricated or stale data as if it were current).
+     *
+     * No battery / RSSI field is exposed on purpose: this project never
+     * receives those over SSP or AVRCP, so there is nothing real to show.
+     */
+    struct DeviceCaps {
+        bool     known = false;
+        bool     sbc = false;
+        bool     aac = false;
+        bool     ssc = false;
+        bool     ssc_uhq = false;   /* SSC UHQ2 / 96 kHz capability bit */
+        uint8_t  ssc_cap = 0;       /* raw SSC capability octet */
+    };
+
+    DeviceCaps get_device_caps() const;
+
     /* ---- Callbacks (called from worker threads, must be thread-safe) ---- */
     using StateCallback = std::function<void(State state, const std::string &status_text)>;
     using StreamInfoCallback = std::function<void(const StreamInfo &info)>;
@@ -161,6 +184,13 @@ private:
 
     /* ---- State ---- */
     std::atomic<State> state_{State::Idle};
+
+    /* ---- Headset capabilities (bit 0 = known, 1 = SBC, 2 = AAC,
+     * 3 = SSC, 4 = SSC UHQ2/96 kHz). Written on the worker thread right
+     * after A2DP discovery, read from the UI thread. */
+    std::atomic<uint32_t> device_caps_bits_{0};
+    std::atomic<uint8_t>  device_ssc_cap_{0};
+    void set_device_caps(bool sbc, bool aac, bool ssc, bool ssc_uhq, uint8_t ssc_cap);
 
     /* ---- Callbacks ---- */
     StateCallback state_cb_;

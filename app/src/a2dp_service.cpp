@@ -536,6 +536,29 @@ A2dpService::~A2dpService() {
     stop_streaming();
 }
 
+void A2dpService::set_device_caps(bool sbc, bool aac, bool ssc, bool ssc_uhq,
+                                  uint8_t ssc_cap) {
+    device_ssc_cap_.store(ssc_cap, std::memory_order_relaxed);
+    uint32_t bits = 1u;
+    if (sbc)     bits |= (1u << 1);
+    if (aac)     bits |= (1u << 2);
+    if (ssc)     bits |= (1u << 3);
+    if (ssc_uhq) bits |= (1u << 4);
+    device_caps_bits_.store(bits, std::memory_order_release);
+}
+
+A2dpService::DeviceCaps A2dpService::get_device_caps() const {
+    uint32_t bits = device_caps_bits_.load(std::memory_order_acquire);
+    DeviceCaps c;
+    c.known    = (bits & 1u) != 0;
+    c.sbc      = (bits & (1u << 1)) != 0;
+    c.aac      = (bits & (1u << 2)) != 0;
+    c.ssc      = (bits & (1u << 3)) != 0;
+    c.ssc_uhq  = (bits & (1u << 4)) != 0;
+    c.ssc_cap  = device_ssc_cap_.load(std::memory_order_relaxed);
+    return c;
+}
+
 std::string A2dpService::get_config_dir() const {
     return ::get_config_dir();
 }
@@ -988,6 +1011,9 @@ void A2dpService::stop_streaming() {
     fflush(stderr);
 
     running_.store(false);
+    /* The headset's capabilities describe the *current* link; once it is gone
+     * the UI must fall back to "not known" rather than keep showing them. */
+    set_device_caps(false, false, false, false, 0);
     notify_state(State::Idle, L("status.ready"));
 }
 
@@ -1107,6 +1133,10 @@ void A2dpService::streaming_thread_func_inner() {
     auto raw_caps = transport->get_remote_caps();
     codec_policy::Caps caps{ raw_caps.sbc, raw_caps.aac, raw_caps.ssc,
                              raw_caps.ssc_cap, raw_caps.ssc_uhq };
+    /* Publish the headset's real capabilities so the UI can show them instead
+     * of guessing (docs/dev/PLAN_UX_DESIGN.md Faz 2). */
+    set_device_caps(raw_caps.sbc, raw_caps.aac, raw_caps.ssc,
+                    raw_caps.ssc_uhq, raw_caps.ssc_cap);
     AudioCodec selected_codec = requested_codec;
     if (!codec_policy::resolve_codec(requested_codec, caps, &selected_codec)) {
         notify_state(State::Error, L("error.no_compatible_codec"));

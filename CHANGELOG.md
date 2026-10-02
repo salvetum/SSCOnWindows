@@ -11,6 +11,18 @@ Types of changes: **Added** / **Changed** / **Deprecated** / **Removed** /
 
 ### Changed
 
+- **WinUI: headset capabilities and stream-health verdict**
+  (`docs/dev/PLAN_UX_DESIGN.md` Faz 2) — `A2dpService::get_device_caps()` now
+  exposes what the headset actually advertises (SBC/AAC/SSC, the SSC capability
+  octet and the UHQ 96 kHz bit) and the Connected device panel shows it, with a
+  dedicated line for UHQ because its absence is the one case that produces
+  silence. No battery or signal field was added: this project never receives
+  them, and the plan forbids inventing data. Live statistics gained an overall
+  **Good / Fair / Poor** verdict with the reason ("send errors", "audio
+  dropped", "transport queue backing up", "encoder too slow for the frame
+  budget") derived from the real metrics, plus a freshness line: the values dim
+  and say "last update over 6 s ago" once the ~1 Hz stats feed stops, so a dead
+  counter cannot look live.
 - **WinUI: state-first status card and information architecture**
   (`docs/dev/PLAN_UX_DESIGN.md` Faz 1) — the window is reorganised into
   **Connected device** / **Audio status** / **Live statistics** /

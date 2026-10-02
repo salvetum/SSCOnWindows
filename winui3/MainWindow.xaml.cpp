@@ -336,6 +336,20 @@ namespace winrt::A2DPWBWinUI::implementation
         uiReady_ = true;
         UpdateBitDepthForCodec();
 
+        /* Plan Faz 2: nothing pushes stats while the stream is stopped, so the
+         * freshness label and the "grey out stale values" rule need their own
+         * heartbeat to stay honest. */
+        if (auto dq = dispatcher_) {
+            freshness_timer_ = dq.CreateTimer();
+            freshness_timer_.Interval(std::chrono::milliseconds(1000));
+            freshness_timer_.Tick([this](Microsoft::UI::Dispatching::DispatcherQueueTimer const&,
+                                         IInspectable const&) {
+                UpdateFreshness();
+            });
+            freshness_timer_.Start();
+        }
+        UpdateFreshness();
+
         // Auto-connect (plan section 3): resume the last device at launch
         if (settings_.auto_connect_on_start && !settings_.last_device_mac.empty()) {
             auto st = detect_dongle_driver(0x2357, 0x0604);
@@ -598,6 +612,13 @@ namespace winrt::A2DPWBWinUI::implementation
     void MainWindow::SetStreamingUi(bool streaming)
     {
         isStreaming_ = streaming;
+        if (!streaming) {
+            /* The stats callback stops firing, so the last values are no longer
+             * current - grey them out instead of leaving them to look live. */
+            stats_are_fresh_ = false;
+            if (StatsFreshnessText()) UpdateFreshness();
+            if (DeviceCapsText()) UpdateDeviceCaps();
+        }
         ConnectButton().Content(winrt::box_value(streaming ? L"Disconnect" : L"Connect"));
         DirectConnectButton().Content(winrt::box_value(streaming ? L"Disconnect" : L"Direct Connect"));
     }
@@ -779,12 +800,125 @@ namespace winrt::A2DPWBWinUI::implementation
         if (stats.loss_rate >= 0.01f)
             LossRateText().Foreground(TagBrush(L"TagErrorBrush"));
 
+        /* Overall verdict from the same real numbers. Thresholds come from the
+         * frame budget: an SSC frame is 864 samples, i.e. 18 ms at 48 kHz, so an
+         * encode round-trip above that can no longer keep up.
+         * docs/dev/PLAN_UX_DESIGN.md Faz 2: a short health word beside the
+         * values, never a bare number. */
+        const char* verdict = "Good";
+        LogTag tone = LogTag::Ok;
+        if (stats.latency_ms > 18.0 || stats.error_rate >= 0.05 ||
+            stats.loss_rate >= 0.02 || stats.queue_depth >= 32) {
+            verdict = "Poor";
+            tone = LogTag::Error;
+        } else if (stats.latency_ms > 10.0 || stats.error_rate >= 0.01 ||
+                   stats.loss_rate >= 0.005 || stats.queue_depth >= 8) {
+            verdict = "Fair";
+            tone = LogTag::Warn;
+        }
+        std::string health(verdict);
+        health += "  -  ";
+        std::string why;
+        auto why_add = [&why](const char* s) {
+            if (!why.empty()) why += "; ";
+            why += s;
+        };
+        if (stats.latency_ms > 18.0)
+            why_add("encoder too slow for the frame budget");
+        if (stats.error_rate >= 0.01)
+            why_add("send errors");
+        if (stats.loss_rate >= 0.005)
+            why_add("audio dropped");
+        if (stats.queue_depth >= 8)
+            why_add("transport queue backing up");
+        health += why.empty() ? "no dropped frames or send errors" : why;
+        StreamHealthText().Text(AToW(health));
+        if (auto brush = TagBrush(tone == LogTag::Ok    ? L"TagOkBrush"
+                                 : tone == LogTag::Warn  ? L"TagWarnBrush"
+                                                         : L"TagErrorBrush")) {
+            StreamHealthText().Foreground(brush);
+        }
+
+        /* Mark the block fresh again; UpdateFreshness() ages it from here so a
+         * dead stats feed cannot masquerade as live numbers. */
+        last_stats_tick_ = GetTickCount64();
+        stats_are_fresh_ = true;
+        UpdateFreshness();
+
+        UpdateDeviceCaps();
+
         // Feed history for the sparkline (~120 samples â‰ˆ 4 min at 2 Hz)
         sparkLatency_.push_back(static_cast<float>(stats.latency_ms));
         sparkError_.push_back(static_cast<float>(stats.error_rate));
         while (sparkLatency_.size() > 120) sparkLatency_.pop_front();
         while (sparkError_.size() > 120) sparkError_.pop_front();
         UpdateSparkline();
+    }
+
+    /* Plan Faz 2: dynamic values must not look current when they are not.
+     * The core pushes stats ~1 Hz while streaming and nothing at all when
+     * stopped, so after a few seconds without a tick the panel is greyed out
+     * and the freshness line says so explicitly. */
+    void MainWindow::UpdateFreshness()
+    {
+        if (!StatsFreshnessText()) return;
+        if (!stats_are_fresh_) {
+            StatsFreshnessText().Text(L"no stream - statistics are not being collected");
+            for (auto t : { LatencyText(), ErrorRateText(), LossRateText(), QueueText() }) {
+                if (t) t.Opacity(0.45);
+            }
+            return;
+        }
+        uint64_t age_ms = GetTickCount64() - last_stats_tick_;
+        char buf[64];
+        snprintf(buf, sizeof(buf), "updated %.1f s ago", age_ms / 1000.0);
+        StatsFreshnessText().Text(AToW(buf));
+        const bool stale = age_ms > 6000;
+        for (auto t : { LatencyText(), ErrorRateText(), LossRateText(), QueueText() }) {
+            if (t) t.Opacity(stale ? 0.45 : 1.0);
+        }
+        if (stale) StatsFreshnessText().Text(L"last update over 6 s ago - values may be stale");
+    }
+
+    /* Plan Faz 2: show what the headset really advertises. Nothing is inferred;
+     * before the link is up the panel says the capabilities are unknown rather
+     * than rendering an all-false list. */
+    void MainWindow::UpdateDeviceCaps()
+    {
+        auto caps = service_ ? service_->get_device_caps() : A2dpService::DeviceCaps{};
+        if (!caps.known) {
+            DeviceCapsText().Text(L"Not known until connected.");
+            return;
+        }
+        std::string list;
+        auto add = [&list](const char* name) {
+            if (!list.empty()) list += ", ";
+            list += name;
+        };
+        if (caps.sbc) add("SBC");
+        if (caps.aac) add("AAC");
+        if (caps.ssc) add("SSC");
+        if (list.empty()) list = "none advertised";
+        std::string text = "Codecs: " + list;
+        if (caps.ssc) {
+            char buf[32];
+            snprintf(buf, sizeof(buf), " (cap 0x%02X)", caps.ssc_cap);
+            text += buf;
+        }
+        DeviceCapsText().Text(AToW(text));
+
+        /* UHQ gets its own line because it is the one capability whose absence
+         * silently produces silence: the app then keeps the stream at 48 kHz. */
+        std::string uhq;
+        if (!caps.ssc) {
+            uhq = "UHQ 96 kHz: not applicable (this headset does not offer SSC).";
+        } else if (caps.ssc_uhq) {
+            uhq = "UHQ 96 kHz: supported - 96k can be selected in Audio settings.";
+        } else {
+            uhq = "UHQ 96 kHz: not advertised by this headset - the stream stays at 48 kHz. "
+                  "Selecting 96k anyway produces silence, so the app falls back automatically.";
+        }
+        DeviceCapsHintText().Text(AToW(uhq));
     }
 
     void MainWindow::UpdateSparkline()
