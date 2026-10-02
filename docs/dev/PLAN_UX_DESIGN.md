@@ -31,7 +31,7 @@ sözleşmesi için `PLAN_DESIGN_CONSISTENCY.md` referans alınır.
 
 ## Kapsam
 
-### Faz 1 — Bilgi mimarisi ve durum ekranı
+### Faz 1 — Bilgi mimarisi ve durum ekranı ✅ (2026-09-21)
 
 - Ana ekranı `Bağlı cihaz`, `Ses durumu`, `Canlı istatistikler` ve `Sorun giderme`
 	bölümlerine ayır.
@@ -44,6 +44,27 @@ sözleşmesi için `PLAN_DESIGN_CONSISTENCY.md` referans alınır.
 **Kabul kriterleri:** Kullanıcı cihaz adını ve bağlantı durumunu ana ekranda
 tek bakışta görür; bağlantı kesildiğinde hangi eylemi yapacağı açıkça yazılır;
 log paneli açılıp kapatıldığında pencere düzeni bozulmaz.
+
+**Uygulandı (commit `de21dfd`):**
+`winui3/MainWindow.xaml` baştan yazıldı. Üstte 6 birincil eylem düğmesi
+(ipucu metinli), altında **durum kartı**: Segoe Fluent Icons simgesi + başlık +
+sıradan dille açıklama + açık bir sonraki adım satırı (`Next: ...`). Kartın
+sağında cihaz adı ve MAC. Altında `Connected device` / `Audio status` /
+`Live statistics` / `Audio settings` / `Troubleshooting` bölümleri ve
+açılıp kapanabilir `Activity log` (yalnızca görünürlük değişiyor, kayıtlar
+korunuyor; kapalıyken son satır `LogSummaryText` içinde görünüyor).
+
+Asıl bulgu: `A2dpService::notify_state()` **yerelleştirme anahtarı** gönderiyor
+(`status.connected`, `error.pairing_hint`, ...), metin değil; eski arayüz bunu
+olduğu gibi basıyordu. `winui3/MainWindow.xaml.cpp` içine 8 `status.*` ve 13
+`error.*` anahtarını kullanıcı metnine çeviren `CopyForKey()` tablosu eklendi;
+`BaseCopyForState()` enum'a göre taban metni verir, `UpdateStatusCard()` ikisini
+birleştirip karta yazar. Ham anahtar tanı için loga yazılmaya devam eder.
+Simge rengi tek başına anlam taşımaz (her durumda simge + metin birlikte).
+`Audio status` altına `AudioStatusHintText` eklendi: 96 kHz UHQ'nin 48 kHz
+loopback'ten upsample edildiği ve UHQ destekleyen kulaklık gerektirdiği,
+loopback'in ses karışımından önce alındığı (hoparlör seviyesi etkilemez),
+oran farkı varsa resampling yapıldığı açıklanır.
 
 ### Faz 2 — Cihaz bilgisi ve canlı sağlık göstergeleri
 

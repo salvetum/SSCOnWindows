@@ -9,6 +9,22 @@ Types of changes: **Added** / **Changed** / **Deprecated** / **Removed** /
 
 ## [Unreleased]
 
+### Changed
+
+- **WinUI: state-first status card and information architecture**
+  (`docs/dev/PLAN_UX_DESIGN.md` Faz 1) — the window is reorganised into
+  **Connected device** / **Audio status** / **Live statistics** /
+  **Audio settings** / **Troubleshooting**, with the primary actions (scan,
+  connect, direct connect, reconnect last, setup & help) kept visible in the
+  header. `A2dpService::notify_state()` emits localization *keys*, not prose, so
+  the old status strip rendered raw values such as `status.connected`; a new
+  status card now resolves all 8 `status.*` and 13 `error.*` keys into a glyph,
+  a headline, a plain-language explanation and an explicit **Next:** step (the
+  raw key is still logged for diagnostics). The activity log is collapsible and
+  keeps its entries, showing a summary line while collapsed, and the Audio status
+  panel explains what its numbers mean (96 kHz UHQ is upsampled from the 48 kHz
+  loopback capture, loopback is pre-mix, a rate mismatch means resampling).
+
 ### Added
 
 - **`SscEncodeBackend` isolation** (Faz 6a) — the closed-source encoder blob is now
