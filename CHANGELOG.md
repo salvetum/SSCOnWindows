@@ -24,6 +24,22 @@ Types of changes: **Added** / **Changed** / **Deprecated** / **Removed** /
   remains the recommended legal path).
 - **LICENSE** now also carries the fork copyright line
   (`Copyright (c) 2026 Salvetum (SSC On Windows fork)`).
+- **`--hci-dump`** CLI flag — re-enables the BTstack HCI packet dump on stdout,
+  which is now off by default (see *Fixed*).
+
+### Fixed
+
+- **Silent A2DP stream after the `SscEncodeBackend` refactor (Faz 6a)** — the new
+  `DaemonSscBackend::encode()` compared the 6912-byte int32 input frame against
+  the 4096-byte output buffer cap, so every encode call bailed out
+  (`enc_calls=0`). The link negotiated fine but no media ever reached the
+  headset. The check now only rejects zero frames/channels; the output side was
+  and remains bounded by `ret <= kMaxEncodeBytes`.
+- **Choppy/intermittent audio in the CLI** — the CLI forced
+  `set_hci_dump_enabled(true)`, hexdumping every ACL packet to stdout on the
+  BTstack thread. Console I/O serialized that thread and cut the media send rate
+  from ~55 packets/s to ~3/s, filling the media queue (`q=64`, `fail=100+`).
+  The dump is now opt-in via `--hci-dump`; the WinUI surface already disabled it.
 
 ## [0.2.0] — 2026-09-21
 

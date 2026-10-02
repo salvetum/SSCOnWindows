@@ -17,6 +17,16 @@
 | 6 | Kapalı Kaynak SSC Bağımlılığı | ✅ 6a (2026-09-21, `SscEncodeBackend` + Legal status; blob kullanıcı kararı ile tracked kaldı) — 6b açık kalır |
 | 7 | Topluluk ve Sürdürülebilirlik | ⏳ |
 
+> **2026-09-21 düzeltme notu:** Faz 6a iki canlı regresyon getirmişti, ikisi de aynı
+> gün düzeltildi ve canlı doğrulandı. (a) `DaemonSscBackend::encode()` girdi
+> boyutunu (6912 B) çıktı tamponuyla (4096 B) karşılaştırıp her encode'u reddediyordu
+> → `enc_calls=0`, tam sessizlik. (b) CLI HCI dump'ı zorunlu açıktı; stdout hexdump
+> BTstack thread'ini kilitleyip gönderim hızını 55 → 3 paket/sn düşürüyordu →
+> `q=64 fail=100+`, kesik ses. Detay: CHANGELOG `[Unreleased] / Fixed`.
+>
+> **Ayrıca:** kullanıcı deneyimi planı `docs/dev/PLAN_UX_DESIGN.md` olarak eklendi
+> (Faz 1–4; renk/etiket sözleşmesi `PLAN_DESIGN_CONSISTENCY.md`'den gelir).
+
 ## Bağlam
 
 SSCOnWindows, Samsung'un kapalı kaynak SSC (Samsung Scalable/Seamless Codec) codec'ini

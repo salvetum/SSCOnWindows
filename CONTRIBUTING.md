@@ -46,6 +46,23 @@ git -C extern/btstack apply ..\..\patches\btstack-win-usb-logs.patch
 
 **Build the WinUI GUI:** see [docs/building.md](docs/building.md).
 
+## Development plans
+
+Roadmaps live in `docs/dev/`. Each is a self-contained, phase-by-phase plan with
+acceptance criteria, and each phase is meant to land as its own commit:
+
+| Plan | Scope |
+|------|-------|
+| [`PLAN_PROFESSIONALIZATION.md`](docs/dev/PLAN_PROFESSIONALIZATION.md) | Repository maturity, licensing, CI, tests, docs, closed-source blob strategy |
+| [`PLAN_DESIGN_CONSISTENCY.md`](docs/dev/PLAN_DESIGN_CONSISTENCY.md) | Shared color / label / typography contract across CLI, WinUI, wx and setup (done) |
+| [`PLAN_UX_DESIGN.md`](docs/dev/PLAN_UX_DESIGN.md) | Product-level user experience: status-first information architecture, health indicators, localization |
+| [`ROBUSTNESS_PLAN.md`](docs/dev/ROBUSTNESS_PLAN.md) | Failure-mode hardening |
+| [`PLAN_SYSTEM.md`](docs/dev/PLAN_SYSTEM.md), [`PLAN_WINUI_FEATURES.md`](docs/dev/PLAN_WINUI_FEATURES.md) | System integration and WinUI feature backlog |
+| [`audit-2026.md`](docs/dev/audit-2026.md) | Inventory and license findings behind the professionalization plan |
+
+Visual changes must follow the rulebook in [docs/ui-style.md](docs/ui-style.md);
+`tools/ui_style_check.py` enforces part of it.
+
 ## Pull Requests
 
 1. Fork the repository
