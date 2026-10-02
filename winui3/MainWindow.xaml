@@ -6,28 +6,26 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:local="using:A2DPWBWinUI"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-Title="SSC On Windows"
+    Title="SSC On Windows"
     mc:Ignorable="d">
 
     <!--
       Typography policy (docs/dev/PLAN_DESIGN_CONSISTENCY.md, Faz B):
         UI / sans : 'Segoe UI Variable Text' (Win11) -> 'Segoe UI' fallback
-                    (WinUI default theme font; faz C renk/token isi bu isi almaz)
+                    (WinUI default theme font)
         Mono/diag : 'Cascadia Mono' (OFL, ships with Windows Terminal)
                     -> 'Consolas' fallback   (log pane)
         Numerals  : tabular alignment on stats/value fields:
                     Typography.NumeralAlignment="Tabular"
         No fonts are bundled or embedded; all are OS-distributed.
-    -->
 
-    <!-- 
-      Overall layout:
-         Row 0: Header (title + action buttons)
-         Row 1: Live status line
-         Row 2: Main content (*):
-                 - left:   device list (fixed 300px)
-                 - right:  scrollable control panels (Expander groups)
-         Row 3: Log console (fixed height)
+      Information architecture (docs/dev/PLAN_UX_DESIGN.md, Faz 1):
+        Row 0: header (title + primary actions)
+        Row 1: status card  ->  state + glyph + explanation + next step + device
+        Row 2: content      ->  left: Connected device
+                                 right: Audio status / Live statistics /
+                                        Audio settings / Troubleshooting
+        Row 3: activity log (collapsible; summary line stays visible when closed)
     -->
     <Grid Padding="24" RowSpacing="8">
         <Grid.RowDefinitions>
@@ -52,29 +50,71 @@ Title="SSC On Windows"
 
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"
                         HorizontalAlignment="Right" VerticalAlignment="Center">
-<Button x:Name="ScanButton" Content="Scan Devices" Style="{StaticResource AppButtonStyle}" Click="OnScanClick" />
-                <Button x:Name="ConnectButton" Content="Connect" IsEnabled="False" Style="{StaticResource AppButtonStyle}" Click="OnConnectClick" />
-                <Button x:Name="DirectConnectButton" Content="Direct Connect" Style="{StaticResource AppButtonStyle}" Click="OnDirectConnectClick" />
-                <Button x:Name="ReconnectLastButton" Content="Reconnect Last" IsEnabled="False" Style="{StaticResource AppButtonStyle}" Click="OnReconnectLastClick" />
-                <Button x:Name="ClearButton" Content="Clear Log" Style="{StaticResource AppButtonStyle}" Click="OnClearLogClick" />
-                <Button x:Name="SetupButton" Content="Setup &amp; Help" Style="{StaticResource AppButtonStyle}" Click="OnSetupClick" />
+                <Button x:Name="ScanButton" Content="Scan Devices" Style="{StaticResource AppButtonStyle}" Click="OnScanClick"
+                        ToolTipService.ToolTip="Rescan for nearby Bluetooth audio devices (~8 s)" />
+                <Button x:Name="ConnectButton" Content="Connect" IsEnabled="False" Style="{StaticResource AppButtonStyle}" Click="OnConnectClick"
+                        ToolTipService.ToolTip="Connect to the device selected in the list" />
+                <Button x:Name="DirectConnectButton" Content="Direct Connect" Style="{StaticResource AppButtonStyle}" Click="OnDirectConnectClick"
+                        ToolTipService.ToolTip="Connect straight to a known Bluetooth address" />
+                <Button x:Name="ReconnectLastButton" Content="Reconnect Last" IsEnabled="False" Style="{StaticResource AppButtonStyle}" Click="OnReconnectLastClick"
+                        ToolTipService.ToolTip="Reconnect to the device used most recently" />
+                <Button x:Name="ClearButton" Content="Clear Log" Style="{StaticResource AppButtonStyle}" Click="OnClearLogClick"
+                        ToolTipService.ToolTip="Empty the activity log" />
+                <Button x:Name="SetupButton" Content="Setup &amp; Help" Style="{StaticResource AppButtonStyle}" Click="OnSetupClick"
+                        ToolTipService.ToolTip="First-time pairing steps and troubleshooting FAQ" />
             </StackPanel>
         </Grid>
 
-        <!-- ===================== Status ===================== -->
-        <Border Grid.Row="1" Padding="12,4" CornerRadius="4"
+        <!-- ===================== Status card ===================== -->
+        <!-- Answers "is audio running?" and "what do I do next?" without hunting
+             through menus: glyph + state headline + explanation + explicit action. -->
+        <Border x:Name="StatusCard" Grid.Row="1" Padding="16,12" CornerRadius="8"
+                BorderBrush="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                BorderThickness="1"
                 Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-            <TextBlock x:Name="StatusText" Text="Ready" Foreground="{ThemeResource StatusTextBrush}" />
+            <Grid ColumnSpacing="16">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <FontIcon x:Name="StatusGlyph" Grid.Column="0"
+                          FontFamily="Segoe Fluent Icons" FontSize="30"
+                          VerticalAlignment="Center" HorizontalAlignment="Center"
+                          Width="36" Glyph="&#xE946;"
+                          AutomationProperties.Name="Application state" />
+
+                <StackPanel Grid.Column="1" Spacing="2" VerticalAlignment="Center">
+                    <TextBlock x:Name="StatusHeadlineText" FontSize="18" FontWeight="SemiBold"
+                               Text="Ready" TextWrapping="Wrap" />
+                    <TextBlock x:Name="StatusDetailText" Style="{StaticResource CaptionGrayTextStyle}"
+                               TextWrapping="Wrap"
+                               Text="Not connected to a device yet." />
+                    <TextBlock x:Name="StatusActionText" Style="{StaticResource HintGrayTextStyle}"
+                               TextWrapping="Wrap" Visibility="Collapsed" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2" VerticalAlignment="Center" Margin="16,0,0,0">
+                    <TextBlock Text="Device" Style="{StaticResource CaptionGrayTextStyle}"
+                               HorizontalAlignment="Right" />
+                    <TextBlock x:Name="StatusDeviceText" Text="&#8212;" FontWeight="SemiBold"
+                               HorizontalAlignment="Right" />
+                    <TextBlock x:Name="StatusDeviceMacText" Style="{StaticResource CaptionGrayTextStyle}"
+                               HorizontalAlignment="Right"
+                               Typography.NumeralAlignment="Tabular" />
+                </StackPanel>
+            </Grid>
         </Border>
 
         <!-- ===================== Main content ===================== -->
         <Grid Grid.Row="2" ColumnSpacing="16">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="300" />
+                <ColumnDefinition Width="320" />
                 <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
-            <!-- Left: device list -->
+            <!-- Left: connected device -->
             <Border Grid.Column="0" Padding="12" CornerRadius="8"
                     BorderBrush="{ThemeResource SystemControlForegroundBaseMediumBrush}"
                     BorderThickness="1" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
@@ -82,161 +122,66 @@ Title="SSC On Windows"
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <TextBlock Text="Devices" FontWeight="SemiBold" />
+
+                    <TextBlock Text="Connected device" Style="{StaticResource SectionLabelTextStyle}" />
+
                     <ListView x:Name="DeviceListView" Grid.Row="1"
-                              SelectionChanged="OnDeviceSelectionChanged" />
+                              SelectionChanged="OnDeviceSelectionChanged"
+                              AutomationProperties.Name="Nearby Bluetooth audio devices"
+                              ToolTipService.ToolTip="Pick a device, then press Connect" />
+
+                    <StackPanel Grid.Row="2" Spacing="8">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Connect by address" Style="{StaticResource CaptionGrayTextStyle}" />
+                            <TextBox x:Name="MacAddressBox"
+                                     Text="78:C1:1D:A7:BC:EE"
+                                     PlaceholderText="XX:XX:XX:XX:XX:XX"
+                                     AutomationProperties.Name="Bluetooth address for direct connect" />
+                            <TextBlock Text="Press 'Direct Connect' in the header to use it."
+                                       Style="{StaticResource HintGrayTextStyle}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </StackPanel>
                 </Grid>
             </Border>
 
-            <!-- Right: scrollable control panels -->
+            <!-- Right: scrollable sections -->
             <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled" Margin="0,0,4,0">
                 <StackPanel Spacing="10">
-                    <!-- Direct connect -->
-                    <Expander Header="Direct Connect">
-                        <StackPanel Spacing="8" Margin="0,8,0,0">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock Text="MAC:" Width="50" VerticalAlignment="Center" />
-                                <TextBox x:Name="MacAddressBox" Width="220"
-                                         Text="78:C1:1D:A7:BC:EE"
-                                         PlaceholderText="XX:XX:XX:XX:XX:XX" />
-                            </StackPanel>
-<TextBlock Text="Enter a known device address, then press 'Direct Connect' (header)."
+
+                    <!-- ================= Audio status ================= -->
+                    <Border Padding="12" CornerRadius="8"
+                            BorderBrush="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                            BorderThickness="1"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                        <StackPanel Spacing="6">
+                            <TextBlock Text="Audio status" Style="{StaticResource SectionLabelTextStyle}" />
+                            <TextBlock x:Name="CodecText" Text="Codec: &#8212;" Typography.NumeralAlignment="Tabular" />
+                            <TextBlock x:Name="BitrateText" Text="Bitrate: &#8212;" Typography.NumeralAlignment="Tabular" />
+                            <TextBlock x:Name="SampleRateText" Text="Sample rate: &#8212;" Typography.NumeralAlignment="Tabular" />
+                            <TextBlock x:Name="ChannelsText" Text="Channels: &#8212;" Typography.NumeralAlignment="Tabular" />
+                            <TextBlock x:Name="SourceInfoText" Text="Source: &#8212;" Style="{StaticResource CaptionGrayTextStyle}" />
+                            <TextBlock x:Name="AudioStatusHintText"
+                                       Text="Connect a device to see the active stream settings."
                                        Style="{StaticResource HintGrayTextStyle}" TextWrapping="Wrap" />
                         </StackPanel>
-                    </Expander>
+                    </Border>
 
-                    <!-- Codec -->
-                    <Expander Header="Codec" IsExpanded="True">
-                        <StackPanel Spacing="10" Margin="0,8,0,0">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock Text="Codec:" Width="80" VerticalAlignment="Center" />
-                                <ComboBox x:Name="CodecCombo" Width="160"
-                                          SelectionChanged="OnCodecChanged">
-                                    <ComboBoxItem Content="SSC" IsSelected="True" />
-                                    <ComboBoxItem Content="AAC" />
-                                    <ComboBoxItem Content="SBC" />
-                                </ComboBox>
-                            </StackPanel>
-
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock Text="Quality:" Width="80" VerticalAlignment="Center" />
-                                <ComboBox x:Name="QualityCombo" Width="160"
-                                          SelectionChanged="OnQualityChanged">
-                                    <ComboBoxItem Content="High" IsSelected="True" />
-                                    <ComboBoxItem Content="Standard" />
-                                    <ComboBoxItem Content="Mobile" />
-                                </ComboBox>
-                                <TextBlock Text="Rate:" Width="40" VerticalAlignment="Center" />
-                                <ComboBox x:Name="RateCombo" Width="110"
-                                          SelectionChanged="OnRateChanged">
-                                    <ComboBoxItem Content="48k" IsSelected="True"
-                                                  ToolTipService.ToolTip="SSC standard 48 kHz" />
-                                    <ComboBoxItem Content="96k"
-                                                  ToolTipService.ToolTip="SSC UHQ (96 kHz, requires 2x SRC)" />
-                                </ComboBox>
-                            </StackPanel>
-
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock Text="Bit Depth:" Width="80" VerticalAlignment="Center" />
-                                <ComboBox x:Name="BitDepthCombo" Width="160"
-                                          SelectionChanged="OnBitDepthChanged"
-                                          ToolTipService.ToolTip="PCM bit depth. Sample width is fixed per codec at runtime (SSC: 32-bit, SBC/AAC: 16-bit).">
-                                    <ComboBoxItem Content="Auto" IsSelected="True" />
-                                    <ComboBoxItem Content="16-bit" />
-                                    <ComboBoxItem Content="24-bit" />
-                                    <ComboBoxItem Content="32-bit" />
-                                </ComboBox>
-<TextBlock x:Name="BitDepthHintText" Text="" Style="{StaticResource HintGrayTextStyle}"
-                                           VerticalAlignment="Center" />
-                            </StackPanel>
-
-                            <StackPanel Spacing="4">
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <TextBlock Text="Bitrate:" Width="80" VerticalAlignment="Center" />
-<TextBlock x:Name="BitrateValueText" Text="auto"
-                                               VerticalAlignment="Center" FontWeight="SemiBold"
-                                               Typography.NumeralAlignment="Tabular" />
-<TextBlock Text="(0 = auto)" Style="{StaticResource CaptionGrayTextStyle}"
-                                               VerticalAlignment="Center" />
-                                </StackPanel>
-                                <Slider x:Name="BitrateSlider" Minimum="0" Maximum="990"
-                                        StepFrequency="1" Value="0" Width="340"
-                                        HorizontalAlignment="Left"
-                                        ValueChanged="OnBitrateChanged" />
-                            </StackPanel>
-                        </StackPanel>
-                    </Expander>
-
-                    <!-- Output -->
-                    <Expander Header="Output">
-                        <StackPanel Spacing="8" Margin="0,8,0,0">
-                            <StackPanel Spacing="4">
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <TextBlock Text="Volume:" Width="80" VerticalAlignment="Center" />
-<TextBlock x:Name="VolumeValueText" Text="100%"
-                                               VerticalAlignment="Center" FontWeight="SemiBold"
-                                               Typography.NumeralAlignment="Tabular" />
-                                </StackPanel>
-                                <Slider x:Name="VolumeSlider" Minimum="0" Maximum="100"
-                                        StepFrequency="1" Value="100" Width="340"
-                                        HorizontalAlignment="Left"
-                                        ToolTipService.ToolTip="Device volume (AVRCP absolute volume)"
-                                        ValueChanged="OnVolumeChanged" />
-                            </StackPanel>
-                            <CheckBox x:Name="AutoMuteCheck" Content="Mute speakers while streaming"
-                                      Checked="OnAutoMuteChanged" Unchecked="OnAutoMuteChanged" />
-                            <CheckBox x:Name="AutoConnectCheck"
-                                      Content="Auto-connect last device on start"
-                                      Checked="OnAutoConnectChanged" Unchecked="OnAutoConnectChanged" />
-                        </StackPanel>
-                    </Expander>
-
-                    <!-- Streaming mode / dongle -->
-                    <Expander Header="Streaming Mode (Dongle)">
-                        <StackPanel Spacing="8" Margin="0,8,0,0">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <TextBlock x:Name="DriverStateText" Text="Detecting..."
-                                           VerticalAlignment="Center" FontWeight="SemiBold" />
-                                <Button x:Name="RefreshDriverButton" Content="Refresh"
-                                        Click="OnRefreshDriverClick" VerticalAlignment="Center" />
-                            </StackPanel>
-<TextBlock x:Name="DriverDetailText" Text="" Style="{StaticResource CaptionGrayTextStyle}"
-                                       TextWrapping="Wrap" />
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Button x:Name="EnableStreamingButton"
-                                        Content="Enable Streaming (WinUSB)"
-                                        Click="OnEnableStreamingClick" />
-                                <Button x:Name="RestoreBtButton"
-                                        Content="Restore Windows BT (BTHUSB)"
-                                        Click="OnRestoreBtClick" />
-                            </StackPanel>
-<TextBlock Text="A UAC prompt runs pnputil; stop streaming before switching."
-                                       Style="{StaticResource HintGrayTextStyle}" TextWrapping="Wrap" />
-                        </StackPanel>
-                    </Expander>
-
-                    <!-- Stream info -->
-                    <Expander Header="Stream Info">
-                        <StackPanel Spacing="6" Margin="0,8,0,0">
-<TextBlock x:Name="CodecText" Text="Codec: ---" Typography.NumeralAlignment="Tabular" />
-                            <TextBlock x:Name="BitrateText" Text="Bitrate: ---" Typography.NumeralAlignment="Tabular" />
-                            <TextBlock x:Name="SampleRateText" Text="Sample Rate: ---" Typography.NumeralAlignment="Tabular" />
-                            <TextBlock x:Name="ChannelsText" Text="Channels: ---" Typography.NumeralAlignment="Tabular" />
-                            <TextBlock x:Name="SourceInfoText" Text="Source: ---" Style="{StaticResource CaptionGrayTextStyle}" />
-                        </StackPanel>
-                    </Expander>
-
-                    <!-- Live stats -->
-                    <Expander Header="Live Stats">
-                        <StackPanel Spacing="8" Margin="0,8,0,0">
+                    <!-- ================= Live statistics ================= -->
+                    <Border Padding="12" CornerRadius="8"
+                            BorderBrush="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                            BorderThickness="1"
+                            Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Live statistics" Style="{StaticResource SectionLabelTextStyle}" />
                             <StackPanel Orientation="Horizontal" Spacing="16">
-<TextBlock x:Name="LatencyText" Text="Latency: ---" Style="{StaticResource StatsValueTextStyle}" />
-                                <TextBlock x:Name="ErrorRateText" Text="Error Rate: ---" Style="{StaticResource StatsValueTextStyle}" />
-                                <TextBlock x:Name="LossRateText" Text="Loss Rate: ---" Style="{StaticResource StatsValueTextStyle}" />
+                                <TextBlock x:Name="LatencyText" Text="Latency: &#8212;" Style="{StaticResource StatsValueTextStyle}" />
+                                <TextBlock x:Name="ErrorRateText" Text="Error rate: &#8212;" Style="{StaticResource StatsValueTextStyle}" />
+                                <TextBlock x:Name="LossRateText" Text="Loss rate: &#8212;" Style="{StaticResource StatsValueTextStyle}" />
                             </StackPanel>
-                            <TextBlock x:Name="QueueText" Text="Queue: ---" Style="{StaticResource CaptionGrayTextStyle}"
+                            <TextBlock x:Name="QueueText" Text="Queue: &#8212;" Style="{StaticResource CaptionGrayTextStyle}"
                                        Typography.NumeralAlignment="Tabular" />
                             <Border Height="56" Padding="4"
                                     Background="#15FFFFFF"
@@ -249,23 +194,163 @@ Title="SSC On Windows"
                                               StrokeThickness="1.5" />
                                 </Grid>
                             </Border>
-<TextBlock x:Name="SparklineCaption"
-                                       Text="Latency (0&#8211;25 ms) / Error (0&#8211;5 %)"
+                            <TextBlock x:Name="SparklineCaption"
+                                       Text="Latency (0&#8211;25 ms) / Error rate (0&#8211;5 %)"
                                        Style="{StaticResource HintGrayTextStyle}" />
+                        </StackPanel>
+                    </Border>
+
+                    <!-- ================= Audio settings ================= -->
+                    <Expander Header="Audio settings">
+                        <StackPanel Spacing="10" Margin="0,8,0,0">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="Codec" Width="80" VerticalAlignment="Center" />
+                                <ComboBox x:Name="CodecCombo" Width="160"
+                                          SelectionChanged="OnCodecChanged"
+                                          ToolTipService.ToolTip="Audio codec for Bluetooth streaming. SSC (Samsung Scalable Codec) offers the highest quality.">
+                                    <ComboBoxItem Content="SSC" IsSelected="True" />
+                                    <ComboBoxItem Content="AAC" />
+                                    <ComboBoxItem Content="SBC" />
+                                </ComboBox>
+                                <TextBlock Text="Quality" Width="60" VerticalAlignment="Center" />
+                                <ComboBox x:Name="QualityCombo" Width="140"
+                                          SelectionChanged="OnQualityChanged"
+                                          ToolTipService.ToolTip="Encoding quality level. Higher quality uses more bandwidth.">
+                                    <ComboBoxItem Content="High" IsSelected="True" />
+                                    <ComboBoxItem Content="Standard" />
+                                    <ComboBoxItem Content="Mobile" />
+                                </ComboBox>
+                            </StackPanel>
+
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock Text="Sample rate" Width="80" VerticalAlignment="Center" />
+                                <ComboBox x:Name="RateCombo" Width="110"
+                                          SelectionChanged="OnRateChanged"
+                                          ToolTipService.ToolTip="Higher rates improve quality but use more bandwidth. 96 kHz (UHQ) needs a UHQ-capable headset and is upsampled from 48 kHz.">
+                                    <ComboBoxItem Content="48k" IsSelected="True"
+                                                  ToolTipService.ToolTip="SSC standard 48 kHz" />
+                                    <ComboBoxItem Content="96k"
+                                                  ToolTipService.ToolTip="SSC UHQ (96 kHz, requires 2x SRC)" />
+                                </ComboBox>
+                                <TextBlock Text="Bit depth" Width="72" VerticalAlignment="Center" />
+                                <ComboBox x:Name="BitDepthCombo" Width="140"
+                                          SelectionChanged="OnBitDepthChanged"
+                                          ToolTipService.ToolTip="PCM bit depth. Sample width is fixed per codec at runtime (SSC: 32-bit, SBC/AAC: 16-bit).">
+                                    <ComboBoxItem Content="Auto" IsSelected="True" />
+                                    <ComboBoxItem Content="16-bit" />
+                                    <ComboBoxItem Content="24-bit" />
+                                    <ComboBoxItem Content="32-bit" />
+                                </ComboBox>
+                            </StackPanel>
+                            <TextBlock x:Name="BitDepthHintText" Text="" Style="{StaticResource HintGrayTextStyle}" />
+
+                            <StackPanel Spacing="4">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="Bitrate" Width="80" VerticalAlignment="Center" />
+                                    <TextBlock x:Name="BitrateValueText" Text="auto"
+                                               VerticalAlignment="Center" FontWeight="SemiBold"
+                                               Typography.NumeralAlignment="Tabular" />
+                                    <TextBlock Text="(0 = auto)" Style="{StaticResource CaptionGrayTextStyle}"
+                                               VerticalAlignment="Center" />
+                                </StackPanel>
+                                <Slider x:Name="BitrateSlider" Minimum="0" Maximum="990"
+                                        StepFrequency="1" Value="0" Width="340"
+                                        HorizontalAlignment="Left"
+                                        ToolTipService.ToolTip="Target bitrate. 0 picks the best value the active codec mode allows."
+                                        ValueChanged="OnBitrateChanged" />
+                            </StackPanel>
+
+                            <StackPanel Spacing="4">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <TextBlock Text="Volume" Width="80" VerticalAlignment="Center" />
+                                    <TextBlock x:Name="VolumeValueText" Text="100%"
+                                               VerticalAlignment="Center" FontWeight="SemiBold"
+                                               Typography.NumeralAlignment="Tabular" />
+                                </StackPanel>
+                                <Slider x:Name="VolumeSlider" Minimum="0" Maximum="100"
+                                        StepFrequency="1" Value="100" Width="340"
+                                        HorizontalAlignment="Left"
+                                        ToolTipService.ToolTip="Device volume (AVRCP absolute volume)"
+                                        ValueChanged="OnVolumeChanged" />
+                            </StackPanel>
+                            <CheckBox x:Name="AutoMuteCheck" Content="Mute speakers while streaming"
+                                      ToolTipService.ToolTip="Mutes the Windows render endpoint while streaming. Loopback capture is pre-mix, so the headset audio is unaffected."
+                                      Checked="OnAutoMuteChanged" Unchecked="OnAutoMuteChanged" />
+                            <CheckBox x:Name="AutoConnectCheck"
+                                      Content="Auto-connect last device on start"
+                                      ToolTipService.ToolTip="Resume the last used device when the app launches (needs the dongle in WinUSB mode)."
+                                      Checked="OnAutoConnectChanged" Unchecked="OnAutoConnectChanged" />
+                        </StackPanel>
+                    </Expander>
+
+                    <!-- ================= Troubleshooting ================= -->
+                    <Expander Header="Troubleshooting">
+                        <StackPanel Spacing="8" Margin="0,8,0,0">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <TextBlock x:Name="DriverStateText" Text="Detecting..."
+                                           VerticalAlignment="Center" FontWeight="SemiBold" />
+                                <Button x:Name="RefreshDriverButton" Content="Refresh"
+                                        Style="{StaticResource AppButtonStyle}"
+                                        Click="OnRefreshDriverClick" VerticalAlignment="Center"
+                                        ToolTipService.ToolTip="Re-read the dongle's driver mode" />
+                            </StackPanel>
+                            <TextBlock x:Name="DriverDetailText" Text="" Style="{StaticResource CaptionGrayTextStyle}"
+                                       TextWrapping="Wrap" />
+                            <TextBlock x:Name="DriverHintText"
+                                       Text="Streaming needs the dongle on the WinUSB driver. If it shows BTHUSB, press 'Enable Streaming' and approve the UAC prompt (stop streaming first)."
+                                       Style="{StaticResource HintGrayTextStyle}" TextWrapping="Wrap" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button x:Name="EnableStreamingButton"
+                                        Content="Enable Streaming (WinUSB)"
+                                        Style="{StaticResource AppButtonStyle}"
+                                        Click="OnEnableStreamingClick" />
+                                <Button x:Name="RestoreBtButton"
+                                        Content="Restore Windows BT (BTHUSB)"
+                                        Style="{StaticResource AppButtonStyle}"
+                                        Click="OnRestoreBtClick" />
+                            </StackPanel>
+                            <TextBlock Text="Both buttons run pnputil through a UAC prompt. Streaming must be stopped first."
+                                       Style="{StaticResource HintGrayTextStyle}" TextWrapping="Wrap" />
                         </StackPanel>
                     </Expander>
                 </StackPanel>
             </ScrollViewer>
         </Grid>
 
-        <!-- ===================== Log console ===================== -->
-        <Border Grid.Row="3" Height="120" Padding="8,4"
-                BorderBrush="{ThemeResource SystemControlForegroundBaseMediumBrush}"
-                BorderThickness="1" CornerRadius="4"
-                Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
-<ScrollViewer x:Name="LogScroller" VerticalScrollBarVisibility="Auto">
-                <StackPanel x:Name="LogLines" />
-            </ScrollViewer>
-        </Border>
+        <!-- ===================== Activity log (collapsible) ===================== -->
+        <Grid Grid.Row="3">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Margin="0,0,0,4">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0" Text="Activity log"
+                           Style="{StaticResource SectionLabelTextStyle}" VerticalAlignment="Center" />
+
+                <TextBlock x:Name="LogSummaryText" Grid.Column="1" Margin="12,0,0,0"
+                           Style="{StaticResource HintGrayTextStyle}" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" />
+
+                <Button x:Name="LogToggleButton" Grid.Column="2" Content="Hide log"
+                        Style="{StaticResource AppButtonStyle}" Click="OnToggleLogClick"
+                        ToolTipService.ToolTip="Show or hide the activity log. Entries are kept while it is hidden." />
+            </Grid>
+
+            <Border x:Name="LogPanel" Grid.Row="1" Height="120" Padding="8,4"
+                    BorderBrush="{ThemeResource SystemControlForegroundBaseMediumBrush}"
+                    BorderThickness="1" CornerRadius="4"
+                    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+                <ScrollViewer x:Name="LogScroller" VerticalScrollBarVisibility="Auto">
+                    <StackPanel x:Name="LogLines" />
+                </ScrollViewer>
+            </Border>
+        </Grid>
     </Grid>
 </Window>

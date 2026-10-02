@@ -35,6 +35,7 @@ namespace winrt::A2DPWBWinUI::implementation
         void OnEnableStreamingClick(Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&);
         void OnRestoreBtClick(Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&);
         void OnRefreshDriverClick(Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&);
+        void OnToggleLogClick(Windows::Foundation::IInspectable const&, Microsoft::UI::Xaml::RoutedEventArgs const&);
 
     private:
         std::unique_ptr<A2dpService> service_;
@@ -42,6 +43,8 @@ namespace winrt::A2DPWBWinUI::implementation
         Microsoft::UI::Dispatching::DispatcherQueue dispatcher_{ nullptr };
 
         void UpdateUI(const A2dpService::State& state, const std::string& text);
+        void UpdateStatusCard(const A2dpService::State& state, const std::string& key);
+        void UpdateStatusDevice(const std::string& name, const std::string& mac);
         void AppendLog(const std::string& text);
         void AppendLog(LogTag tag, const std::string& text);
         void AppendLogLine(const std::wstring& text,

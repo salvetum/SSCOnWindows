@@ -44,6 +44,179 @@ namespace
         } catch (...) {}
         return nullptr;
     }
+
+    /* ------------------------------------------------------------------
+     * User-facing copy for the status card (docs/dev/PLAN_UX_DESIGN.md Faz 1).
+     *
+     * A2dpService::notify_state() hands the UI localization *keys*
+     * ("status.ready", "error.pairing_hint", ...), not prose. Showing them
+     * verbatim meant the app said "status.connected" to the user. Every key now
+     * maps to three fields:
+     *   headline - the state, in one or two words
+     *   detail   - the technical term PLUS a plain-language explanation
+     *   action   - the single most useful next step ("do this, then that")
+     * The raw key is still written to the activity log for diagnostics, so
+     * nothing is lost.
+     *
+     * Phase copy for a healthy transition is picked by the State enum; the
+     * per-key entries below only refine it (or override it for errors).
+     * ------------------------------------------------------------------ */
+    /* Severity of a status-card update. Mirrors implementation::LogTag but lives
+     * at file scope so the copy table does not depend on the implementation
+     * namespace being declared first. */
+    enum class Tone { Info, Ok, Warn, Error };
+
+    struct StateCopy {
+        const char* headline;
+        const char* detail;
+        const char* action;   /* "" -> the action line is hidden */
+        wchar_t glyph;        /* single Segoe Fluent Icons code point */
+        Tone tone;
+    };
+
+    /* Segoe Fluent Icons glyphs: color is never the only signal (Faz 1).
+     * Info / Sync / Accept (checkmark) / Error / Warning. */
+    constexpr wchar_t kGlyphInfo    = 0xE946;
+    constexpr wchar_t kGlyphSync    = 0xE895;
+    constexpr wchar_t kGlyphCheck   = 0xE73E;
+    constexpr wchar_t kGlyphError   = 0xE783;
+    constexpr wchar_t kGlyphWarning = 0xE7BA;
+
+    const StateCopy& CopyForKey(const std::string& key)
+    {
+        static const StateCopy kUnknown{
+            "Working on it",
+            "The app is busy setting things up.",
+            "", kGlyphSync, Tone::Info };
+
+        static const std::pair<const char*, StateCopy> kTable[] = {
+            /* ---- healthy transitions ---- */
+            { "status.ready",
+              { "Ready", "No device connected yet.",
+                "Press 'Scan Devices' to look for headsets, or 'Direct Connect' if you know the address.",
+                kGlyphInfo, Tone::Info } },
+            { "status.initializing",
+              { "Starting up", "Bringing up the Bluetooth stack.",
+                "", kGlyphSync, Tone::Info } },
+            { "status.initializing_btstack",
+              { "Starting the dongle",
+                "Opening the USB Bluetooth dongle and loading its firmware.",
+                "This takes a second. Keep the dongle plugged in.", kGlyphSync, Tone::Info } },
+            { "status.connecting_device",
+              { "Pairing with the headset", "Negotiating the A2DP profile.",
+                "Keep the headset close, powered on and out of the case.", kGlyphSync, Tone::Info } },
+            { "status.initializing_audio",
+              { "Starting audio", "Opening Windows loopback capture and the audio encoder.",
+                "", kGlyphSync, Tone::Info } },
+            { "status.connected",
+              { "Connected", "The headset accepted the connection.",
+                "", kGlyphCheck, Tone::Ok } },
+            { "status.reconnected",
+              { "Reconnected", "The headset link came back up.",
+                "", kGlyphCheck, Tone::Ok } },
+            { "status.connection_lost",
+              { "Connection lost", "The headset link dropped.",
+                "Reconnect, or move closer to the dongle.", kGlyphWarning, Tone::Warn } },
+
+            /* ---- actionable errors ---- */
+            { "error.invalid_address",
+              { "Check the address",
+                "That Bluetooth address is not in the expected XX:XX:XX:XX:XX:XX form.",
+                "Fix the address, then press 'Direct Connect'.", kGlyphError, Tone::Error } },
+            { "error.pairing_hint",
+              { "Headset not found",
+                "The headset did not answer the scan. It may be switched off, already connected to "
+                "another device, or out of pairing mode.",
+                "Put both earbuds in the case, hold them until the LED blinks, then press "
+                "'Scan Devices' again.", kGlyphError, Tone::Error } },
+            { "error.no_compatible_codec",
+              { "No compatible codec",
+                "This headset does not offer a codec the app can use (SSC, AAC or SBC), so it cannot "
+                "be streamed to.",
+                "Try another codec under 'Audio settings'. If none work, this headset is not supported.",
+                kGlyphError, Tone::Error } },
+            { "error.btstack_init",
+              { "Dongle not available",
+                "The USB Bluetooth dongle could not be opened, so no connection is possible.",
+                "Open 'Troubleshooting' and check the dongle shows 'WinUSB (Streaming mode)'. "
+                "If not, press 'Enable Streaming (WinUSB)'.", kGlyphError, Tone::Error } },
+            { "error.codec_configure",
+              { "Codec rejected",
+                "The headset refused the codec configuration - usually an unsupported bitrate or "
+                "sample rate for this device.",
+                "Set bitrate to 0 (auto), pick sample rate 48k, then reconnect.", kGlyphError, Tone::Error } },
+            { "error.encoder_init",
+              { "Encoder could not start",
+                "The audio encoder (Samsung SSC) failed to initialise, so no audio can be produced.",
+                "Check the activity log for the reason. The SSC encoder needs WSL2 (or --ssc-native "
+                "Qiling) running.", kGlyphError, Tone::Error } },
+            { "error.stream_start",
+              { "Could not start audio",
+                "The headset accepted the connection but the audio stream would not start.",
+                "Disconnect and reconnect. If it repeats, unplug and replug the dongle.",
+                kGlyphError, Tone::Error } },
+            { "error.wasapi_init",
+              { "Audio capture failed",
+                "Windows loopback capture could not be opened, so there is no audio to stream.",
+                "Check that the default playback device is active and its format is set to 48 kHz.",
+                kGlyphError, Tone::Error } },
+            { "error.encode_thread",
+              { "Encoder stopped",
+                "The thread that encodes and sends audio stopped unexpectedly.",
+                "Read the activity log, then reconnect.", kGlyphError, Tone::Error } },
+            { "error.reconnect_failed",
+              { "Reconnect failed",
+                "Automatic reconnection gave up after several attempts.",
+                "Press 'Reconnect Last', or scan again if the headset was reset.", kGlyphError, Tone::Error } },
+            { "error.btstack_crash_scan",
+              { "Bluetooth stack stopped while scanning",
+                "The Bluetooth stack stopped unexpectedly during the device scan.",
+                "Unplug and replug the dongle, then scan again.", kGlyphError, Tone::Error } },
+            { "error.btstack_crash_stream",
+              { "Bluetooth stack stopped while streaming",
+                "The Bluetooth stack stopped unexpectedly, so audio stopped.",
+                "Unplug and replug the dongle, then reconnect.", kGlyphError, Tone::Error } },
+            { "error.aac_unavailable",
+              { "AAC not available",
+                "This build has no AAC encoder, so the stream falls back to SBC.",
+                "Prefer SSC (Samsung Scalable Codec) for the best quality on Galaxy earbuds.",
+                kGlyphWarning, Tone::Warn } },
+            { "error.virtual_capture_init",
+              { "Virtual audio device unavailable",
+                "The virtual audio endpoint needed to capture microphone input could not be created.",
+                "Install the virtual output driver, or switch the capture mode to loopback.",
+                kGlyphError, Tone::Error } },
+        };
+
+        for (const auto& entry : kTable) {
+            if (key == entry.first) return entry.second;
+        }
+        return kUnknown;
+    }
+
+    /* Base copy for a State enum value; per-key text from CopyForKey()
+     * overrides detail/action when the service sent a known key. */
+    StateCopy BaseCopyForState(A2dpService::State state)
+    {
+        switch (state) {
+        case A2dpService::State::Connecting:
+            return { "Connecting...", "Talking to the headset.",
+                     "Keep the headset close and powered on.", kGlyphSync, Tone::Info };
+        case A2dpService::State::Streaming:
+            return { "Streaming audio", "Windows audio is on its way to the headset.",
+                     "", kGlyphCheck, Tone::Ok };
+        case A2dpService::State::Reconnecting:
+            return { "Reconnecting...", "The link dropped; retrying automatically.",
+                     "If this keeps happening, press 'Reconnect Last'.", kGlyphSync, Tone::Warn };
+        case A2dpService::State::Error:
+            return { "Something went wrong", "The last operation did not finish.",
+                     "See the activity log below for the raw error.", kGlyphError, Tone::Error };
+        case A2dpService::State::Idle:
+        default:
+            return { "Ready", "Not connected to a device.",
+                     "Press 'Scan Devices' to look for headsets.", kGlyphInfo, Tone::Info };
+        }
+    }
 }
 
 namespace winrt::A2DPWBWinUI::implementation
@@ -73,7 +246,7 @@ namespace winrt::A2DPWBWinUI::implementation
         service_->set_auto_mute_output(true);
         AutoMuteCheck().IsChecked(true);
 
-        // State callback (worker thread → UI)
+        // State callback (worker thread â†’ UI)
         service_->set_state_callback([this](A2dpService::State state, const std::string& text) {
             auto captured = this;
             dispatcher_.TryEnqueue([captured, state, text]() {
@@ -81,7 +254,7 @@ namespace winrt::A2DPWBWinUI::implementation
             });
         });
 
-        // Stream info callback (worker thread → UI)
+        // Stream info callback (worker thread â†’ UI)
         service_->set_stream_info_callback([this](const A2dpService::StreamInfo& info) {
             auto captured = this;
             dispatcher_.TryEnqueue([captured, info]() {
@@ -96,10 +269,23 @@ namespace winrt::A2DPWBWinUI::implementation
                                     + std::to_string(info.source_bit_depth) + " bit";
                     captured->SourceInfoText().Text(L"Source: " + AToW(src));
                 }
+                /* Faz 1: explain what the numbers mean, not just show them. */
+                std::string hint;
+                if (info.sample_rate >= 96000) {
+                    hint = "96 kHz UHQ is upsampled from 48 kHz loopback capture; the headset must "
+                           "advertise UHQ support or you will hear silence.";
+                } else if (info.source_sample_rate > 0 &&
+                           info.source_sample_rate != info.sample_rate) {
+                    hint = "Capture and stream rates differ, so the audio is resampled before encoding.";
+                } else {
+                    hint = "Loopback capture is taken before the Windows volume mixer, so the speaker "
+                           "volume slider does not change what the headset plays.";
+                }
+                if (auto h = captured->AudioStatusHintText()) h.Text(AToW(hint));
             });
         });
 
-        // Live stats callback (worker thread → UI, ~2 s cadence)
+        // Live stats callback (worker thread â†’ UI, ~2 s cadence)
         service_->set_stats_callback([this](const A2dpService::StreamStats& stats) {
             auto captured = this;
             dispatcher_.TryEnqueue([captured, stats]() {
@@ -107,7 +293,7 @@ namespace winrt::A2DPWBWinUI::implementation
             });
         });
 
-        // Device volume callback (AVRCP absolute volume, worker thread → UI)
+        // Device volume callback (AVRCP absolute volume, worker thread â†’ UI)
         service_->set_volume_changed_callback([this](uint8_t vol) {
             auto captured = this;
             int pct = (static_cast<int>(vol) * 100 + 63) / 127;
@@ -116,7 +302,7 @@ namespace winrt::A2DPWBWinUI::implementation
             });
         });
 
-        // Scan complete callback (worker thread → UI)
+        // Scan complete callback (worker thread â†’ UI)
         service_->set_scan_complete_callback([this]() {
             auto captured = this;
             dispatcher_.TryEnqueue([captured]() {
@@ -141,6 +327,7 @@ namespace winrt::A2DPWBWinUI::implementation
         // Last-device / auto-connect UI state (persisted in settings.json)
         AutoConnectCheck().IsChecked(settings_.auto_connect_on_start);
         ReconnectLastButton().IsEnabled(!settings_.last_device_mac.empty());
+        UpdateStatusDevice(settings_.last_device_name, settings_.last_device_mac);
 
         // Detect the dongle's driver mode (WinUSB vs BTHUSB) once at startup
         RefreshDriverMode();
@@ -275,10 +462,12 @@ namespace winrt::A2DPWBWinUI::implementation
             selectedDevice_ = devices[idx];
             hasSelectedDevice_ = true;
             ConnectButton().IsEnabled(true);
+            UpdateStatusDevice(selectedDevice_.name, selectedDevice_.addr_str);
             AppendLog(LogTag::Data, "Selected: " + selectedDevice_.name);
         } else {
             hasSelectedDevice_ = false;
             ConnectButton().IsEnabled(false);
+            UpdateStatusDevice(settings_.last_device_name, settings_.last_device_mac);
         }
     }
 
@@ -403,6 +592,7 @@ namespace winrt::A2DPWBWinUI::implementation
         settings_.last_device_name = name;
         settings_.save();
         ReconnectLastButton().IsEnabled(true);
+        UpdateStatusDevice(name, mac);
     }
 
     void MainWindow::SetStreamingUi(bool streaming)
@@ -589,7 +779,7 @@ namespace winrt::A2DPWBWinUI::implementation
         if (stats.loss_rate >= 0.01f)
             LossRateText().Foreground(TagBrush(L"TagErrorBrush"));
 
-        // Feed history for the sparkline (~120 samples ≈ 4 min at 2 Hz)
+        // Feed history for the sparkline (~120 samples â‰ˆ 4 min at 2 Hz)
         sparkLatency_.push_back(static_cast<float>(stats.latency_ms));
         sparkError_.push_back(static_cast<float>(stats.error_rate));
         while (sparkLatency_.size() > 120) sparkLatency_.pop_front();
@@ -639,7 +829,7 @@ namespace winrt::A2DPWBWinUI::implementation
 
     void MainWindow::UpdateUI(const A2dpService::State& state, const std::string& text)
     {
-        StatusText().Text(AToW(text));
+        UpdateStatusCard(state, text);
 
         switch (state) {
         case A2dpService::State::Idle:
@@ -666,6 +856,74 @@ namespace winrt::A2DPWBWinUI::implementation
             break;
         }
         AppendLog(LogTag::Data, "[State] " + text);
+    }
+
+    /* Status card = the one place that answers "is it working, and what do I do
+     * next?". Glyph + headline + explanation + explicit next step, so the state
+     * never depends on color alone (PLAN_UX_DESIGN.md Faz 1). */
+    void MainWindow::UpdateStatusCard(const A2dpService::State& state, const std::string& key)
+    {
+        StateCopy copy = BaseCopyForState(state);
+
+        /* A known localization key refines (and for errors overrides) the copy.
+         * status.connected while streaming should still read as streaming. */
+        if (!key.empty()) {
+            const StateCopy& byKey = CopyForKey(key);
+            const bool isErrorKey = key.rfind("error.", 0) == 0;
+            const bool keyDrivesHeadline = isErrorKey || state == A2dpService::State::Idle;
+            if (keyDrivesHeadline) copy.headline = byKey.headline;
+            if (byKey.detail && byKey.detail[0]) copy.detail = byKey.detail;
+            if (byKey.action && byKey.action[0]) copy.action = byKey.action;
+            if (isErrorKey || state != A2dpService::State::Streaming) {
+                copy.glyph = byKey.glyph;
+                copy.tone = byKey.tone;
+            }
+        }
+
+        StatusHeadlineText().Text(AToW(copy.headline));
+        StatusDetailText().Text(AToW(copy.detail));
+
+        if (copy.action && copy.action[0]) {
+            StatusActionText().Text(AToW(std::string("Next: ") + copy.action));
+            StatusActionText().Visibility(Visibility::Visible);
+        } else {
+            StatusActionText().Text(L"");
+            StatusActionText().Visibility(Visibility::Collapsed);
+        }
+
+        StatusGlyph().Glyph(hstring(std::wstring(1, copy.glyph)));
+
+        /* Tone drives only the glyph color - the headline text carries the same
+         * information, so color is never the sole signal. */
+        switch (copy.tone) {
+        case Tone::Ok:    StatusGlyph().Foreground(TagBrush(L"TagOkBrush"));    break;
+        case Tone::Warn:  StatusGlyph().Foreground(TagBrush(L"TagWarnBrush"));  break;
+        case Tone::Error: StatusGlyph().Foreground(TagBrush(L"TagErrorBrush")); break;
+        default:          StatusGlyph().Foreground(TagBrush(L"TagDataBrush"));  break;
+        }
+    }
+
+    void MainWindow::UpdateStatusDevice(const std::string& name, const std::string& mac)
+    {
+        StatusDeviceText().Text(name.empty() ? hstring(L"\u2014") : AToW(name));
+        StatusDeviceMacText().Text(mac.empty() ? hstring(L"") : AToW(mac));
+    }
+
+    void MainWindow::OnToggleLogClick(IInspectable const&, RoutedEventArgs const&)
+    {
+        /* Collapse by hiding the panel only - the TextBlocks stay in LogLines so
+         * history survives (PLAN_UX_DESIGN.md Faz 1: "keeps entries"). */
+        auto panel = LogPanel();
+        if (!panel) return;
+        const bool collapsed = panel.Visibility() == Visibility::Collapsed;
+        panel.Visibility(collapsed ? Visibility::Visible : Visibility::Collapsed);
+        LogToggleButton().Content(winrt::box_value(collapsed ? L"Hide log" : L"Show log"));
+        if (collapsed) {
+            dispatcher_.TryEnqueue([this] {
+                auto scrollable = LogScroller().ScrollableHeight();
+                LogScroller().ScrollToVerticalOffset(scrollable);
+            });
+        }
     }
 
     void MainWindow::OnRefreshDriverClick(IInspectable const&, RoutedEventArgs const&)
@@ -742,6 +1000,9 @@ namespace winrt::A2DPWBWinUI::implementation
         auto children = LogLines().Children();
         children.Append(line);
         while (children.Size() > kMaxLogLines) children.RemoveAt(0);
+
+        /* Mirror the newest line into the collapsed-log summary. */
+        if (auto summary = LogSummaryText()) summary.Text(hstring(text));
 
         /* Scroll after layout settles so the newest line is visible. */
         dispatcher_.TryEnqueue([this] {
